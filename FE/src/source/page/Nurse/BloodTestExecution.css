@@ -1,0 +1,38 @@
+@keyframes pulseStripe {
+  0% { opacity: 0.2; transform: translateX(-20%); }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.2; transform: translateX(100%); }
+}
+
+.progress-animated {
+  position: relative;
+}
+.progress-animated::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+  mix-blend-mode: screen;
+  animation: pulseStripe 1.2s linear infinite;
+}
+
+/* Subtle dotted grid pattern for the main panel */
+.panel-pattern {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(148,163,184,0.18) 1px, transparent 0),
+    radial-gradient(circle at 1px 1px, rgba(148,163,184,0.08) 1px, transparent 0);
+  background-size: 16px 16px, 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+/* Progress dot that follows the bar */
+.progress-dot {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  box-shadow: 0 0 10px rgba(255,255,255,0.6);
+  transition: left 0.3s ease;
+}

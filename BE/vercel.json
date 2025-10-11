@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "app.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/app.js" }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "MONGO_URI": "mongodb+srv://admin:admin@cluster0.y5hcrmq.mongodb.net/Laboratory_Management?retryWrites=true&w=majority",
+    "JWT_SECRET": "yourSuperSecretKey",
+    "MAIL_HOST": "smtp.gmail.com",
+    "MAIL_PORT": "465",
+    "MAIL_USERNAME": "khoalhse183675@fpt.edu.vn",
+    "MAIL_PASSWORD": "wfddccuwgqrlihpy",
+    "MAIL_ENCRYPTION": "ssl",
+    "MAIL_FROM_ADDRESS": "khoalhse183675@fpt.edu.vn"
+  }
+}
