@@ -1,0 +1,145 @@
+tags:
+  - name: Auth
+    description: Authentication and login API
+
+paths:
+  /api/auth/login:
+    post:
+      summary: Login and get JWT token
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT Token for authentication
+        401:
+          description: Incorrect username or password
+        500:
+          description: Server error
+
+  /api/auth/register:
+    post:
+      summary: Register new account
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userid:
+                  type: string
+                username:
+                  type: string
+                password:
+                  type: string
+                email:
+                  type: string
+                phoneNumber:
+                  type: string
+                fullName:
+                  type: string
+                identifyNumber:
+                  type: string
+                age:
+                  type: integer
+                address:
+                  type: string
+                dateOfBirth:
+                  type: string
+                  format: date
+                role:
+                  type: string
+      responses:
+        201:
+          description: Registration successful
+        400:
+          description: Invalid data or account already exists
+        500:
+          description: Server error
+
+  /api/auth/verify/{token}:
+    get:
+      summary: Verify account with token
+      tags: [Auth]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+          description: Account verification token (sent via email)
+      responses:
+        200:
+          description: Account has been activated
+        400:
+          description: Invalid or expired token
+        500:
+          description: Server error
+
+  /api/auth/forgot-password:
+    post:
+      summary: Send forgot password email
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+      responses:
+        200:
+          description: Password reset email has been sent
+        404:
+          description: No account found with this email
+        500:
+          description: Server error
+
+  /api/auth/reset-password/{token}:
+    post:
+      summary: Reset password with new password
+      tags: [Auth]
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+          description: Password reset token (sent via email)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newPassword:
+                  type: string
+      responses:
+        200:
+          description: Password reset successful
+        400:
+          description: Invalid or expired token
+        500:
+          description: Server error

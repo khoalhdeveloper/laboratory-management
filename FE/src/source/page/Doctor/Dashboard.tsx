@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell
 } from 'recharts'
 import {
@@ -21,6 +21,8 @@ import {
 } from 'lucide-react'
 import { exportEquipmentData, exportReagentData, exportEventLogData } from '../../../utils/exportUtils'
 import { toast } from '../../../utils/toast'
+import { useDarkMode } from './DarkModeUtils'
+import { instrumentAPI, reagentAPI, eventLogAPI, type Instrument, type EventLogItem } from '../Axios/Axios'
 
 // Interface definitions matching other pages
 interface Equipment {
@@ -28,7 +30,7 @@ interface Equipment {
   name: string
   type: string
   room: string
-  status: 'Active' | 'In Use' | 'Maintenance'
+  status: 'Available' | 'In Use' | 'Maintenance' | 'Out of Service'
   lastCheck: string
   nextCheck: string
   category?: string
@@ -61,6 +63,8 @@ interface EventLog {
 
 function Dashboard() {
   const navigate = useNavigate()
+  const { isDarkMode } = useDarkMode()
+
   const [reagentHistory, setReagentHistory] = useState<ReagentHistory[]>([])
   const [equipments, setEquipments] = useState<Equipment[]>([])
   const [eventLogs, setEventLogs] = useState<EventLog[]>([])
@@ -91,121 +95,169 @@ function Dashboard() {
 
   const loadEventData = async () => {
     try {
-      // Mock event logs matching EventLog page
-      const mockEventLogs: EventLog[] = [
-        {
-          id: '1', eventId: 'E_00001', action: 'Create', eventLogMessage: 'Event message used when a new test order is created.',
-          operator: 'Dr. Huy Nguyen', date: '2024-01-15', timestamp: '2024-01-15 14:32:15', status: 'Success' as const, category: 'Test Order'
-        },
-        {
-          id: '2', eventId: 'E_00002', action: 'Update', eventLogMessage: 'Event message used when a test order is updated.',
-          operator: 'Dr. Sarah Chen', date: '2024-01-15', timestamp: '2024-01-15 13:45:22', status: 'Info' as const, category: 'Test Order'
-        },
-        {
-          id: '3', eventId: 'E_00003', action: 'Delete', eventLogMessage: 'Event message used when a test order is deleted.',
-          operator: 'Dr. Michael Johnson', date: '2024-01-15', timestamp: '2024-01-15 12:18:30', status: 'Warning' as const, category: 'Test Order'
-        },
-        {
-          id: '4', eventId: 'E_00004', action: 'Modify', eventLogMessage: 'Event message used when a test result is modified.',
-          operator: 'Lab Tech. Anna Wilson', date: '2024-01-15', timestamp: '2024-01-15 11:22:45', status: 'Success' as const, category: 'Test Result'
-        },
-        {
-          id: '5', eventId: 'E_00005', action: 'Add', eventLogMessage: 'Event message used when new comment of test result is added.',
-          operator: 'Dr. Emily Rodriguez', date: '2024-01-15', timestamp: '2024-01-15 10:15:12', status: 'Info' as const, category: 'Comment'
-        }
-      ]
-      setEventLogs(mockEventLogs)
+      const response = await eventLogAPI.getDoctorLogs()
+      const apiLogs = response.data.data || []
       
-      // Generate stats for chart (events per day)
-      const statsData = [
-        { date: '10/09', events: 5, info: 2, warning: 1, error: 0, success: 2 },
-        { date: '10/08', events: 3, info: 1, warning: 0, error: 1, success: 1 },
-        { date: '10/07', events: 4, info: 2, warning: 1, error: 0, success: 1 },
-        { date: '10/06', events: 2, info: 1, warning: 0, error: 0, success: 1 },
-        { date: '10/05', events: 1, info: 0, warning: 1, error: 0, success: 0 },
-        { date: '10/04', events: 3, info: 1, warning: 0, error: 1, success: 1 }
-      ]
+      // Transform API data to match EventLog interface
+      const transformedLogs: EventLog[] = apiLogs.map((log: EventLogItem) => {
+        let status: 'Success' | 'Error' | 'Info' | 'Warning' = 'Info'
+        const message = log.message.toLowerCase()
+        if (message.includes('success') || message.includes('created') || message.includes('completed')) {
+          status = 'Success'
+        } else if (message.includes('error') || message.includes('failed')) {
+          status = 'Error'
+        } else if (message.includes('warning') || message.includes('deleted')) {
+          status = 'Warning'
+        }
+        
+        let action: 'Create' | 'Update' | 'Delete' | 'Modify' = 'Modify'
+        if (message.includes('create')) action = 'Create'
+        else if (message.includes('update')) action = 'Update'
+        else if (message.includes('delete')) action = 'Delete'
+        
+        let category: 'Test Order' | 'Test Result' | 'Comment' | 'Review' | 'Instrument' | 'User' | 'System' = 'System'
+        if (log.role === 'doctor') category = 'Test Order'
+        
+        const createdDate = new Date(log.createdAt)
+        
+        return {
+          id: log._id,
+          eventId: log.event_id,
+          action: action,
+          eventLogMessage: log.message,
+          operator: log.performedBy || 'Unknown User',
+          date: createdDate.toISOString().split('T')[0],
+          timestamp: createdDate.toLocaleString('en-GB', { 
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+          }).replace(',', ''),
+          status: status,
+          category: category
+        }
+      })
+      
+      setEventLogs(transformedLogs)
+      
+      // Generate stats for chart (events per day) - show all days in range
+      const eventsByDate: any = {}
+      
+      // Get date range (last 7 days)
+      const today = new Date()
+      const daysToShow = 7
+      
+      // Initialize all days with zero events
+      for (let i = daysToShow - 1; i >= 0; i--) {
+        const date = new Date(today)
+        date.setDate(date.getDate() - i)
+        const dateKey = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })
+        eventsByDate[dateKey] = { 
+          date: dateKey, 
+          events: 0, 
+          info: 0, 
+          warning: 0, 
+          error: 0, 
+          success: 0 
+        }
+      }
+      
+      // Fill in actual event counts
+      transformedLogs.forEach((log) => {
+        const date = new Date(log.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' })
+        if (eventsByDate[date]) {
+          eventsByDate[date].events++
+          eventsByDate[date][log.status.toLowerCase()]++
+        }
+      })
+      
+      const statsData = Object.values(eventsByDate)
       setEventStats(statsData)
       
       // Calculate event type distribution
       const typeData = [
-        { name: 'Success', value: mockEventLogs.filter(e => e.status === 'Success').length, color: '#10B981' },
-        { name: 'Info', value: mockEventLogs.filter(e => e.status === 'Info').length, color: '#3B82F6' },
-        { name: 'Warning', value: mockEventLogs.filter(e => e.status === 'Warning').length, color: '#F59E0B' },
-        { name: 'Error', value: mockEventLogs.filter(e => e.status === 'Error').length, color: '#EF4444' }
+        { name: 'Success', value: transformedLogs.filter(e => e.status === 'Success').length, color: '#10B981' },
+        { name: 'Info', value: transformedLogs.filter(e => e.status === 'Info').length, color: '#3B82F6' },
+        { name: 'Warning', value: transformedLogs.filter(e => e.status === 'Warning').length, color: '#F59E0B' },
+        { name: 'Error', value: transformedLogs.filter(e => e.status === 'Error').length, color: '#EF4444' }
       ]
       setEventTypeData(typeData)
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading event data:', error)
+      toast.error(error.response?.data?.message || 'Failed to load event logs')
     }
   }
 
   const loadReagentHistory = async () => {
     try {
-      // Mock data matching ReagentHistory page
-      const mockReagents = [
-        {
-          id: '1', lotNumber: 'LR-2024-001', supplier: 'ChemSupplies Inc.',
-          date: '2024-12-31', quantity: 100, type: 'supply', status: 'Active'
-        },
-        {
-          id: '2', lotNumber: 'LR-2024-002', supplier: 'LabChem Co.',
-          date: '2024-11-15', quantity: 75, type: 'supply', status: 'Active'
-        },
-        {
-          id: '3', lotNumber: 'LR-2024-003', supplier: 'BioReagents Ltd.',
-          date: '2024-10-20', quantity: 50, type: 'supply', status: 'Expiring Soon'
-        },
-        {
-          id: '4', lotNumber: 'LR-2023-015', supplier: 'Global Chemicals',
-          date: '2023-09-30', quantity: 0, type: 'supply', status: 'Expired'
-        }
-      ]
-      setReagentHistory(mockReagents)
+      const response = await reagentAPI.getAll()
+      const reagents = response.data.data || []
       
-    } catch (error) {
+      const formattedReagents: ReagentHistory[] = reagents.map((reagent: any) => {
+        // Calculate status based on quantity
+        let status = 'Active'
+        if (reagent.quantity_available <= 0) {
+          status = 'Expired'
+        } else if (reagent.quantity_available <= 10) {
+          status = 'Expiring Soon'
+        }
+        
+        return {
+          id: reagent._id,
+          lotNumber: reagent.catalog_number || reagent.reagent_name,
+          supplier: reagent.manufacturer || 'N/A',
+          date: reagent.created_at ? new Date(reagent.created_at).toLocaleDateString('en-GB') : 'N/A',
+          quantity: reagent.quantity_available,
+          type: 'supply',
+          status: status
+        }
+      })
+      
+      setReagentHistory(formattedReagents)
+      
+    } catch (error: any) {
       console.error('Error loading reagent history:', error)
+      toast.error(error.response?.data?.message || 'Lỗi khi tải danh sách thuốc thử')
+      // Fallback to empty array on error
+      setReagentHistory([])
     }
   }
 
   const loadEquipments = async () => {
     try {
-      // Mock data matching Instrucment page
-      const mockEquipments: Equipment[] = [
-        {
-          id: 'EQ-1001', name: 'pH Meter Pro', type: 'pH Meter', category: 'Measurement',
-          manufacturer: 'Hanna Instruments', model: 'HI-2020', serialNumber: 'HI2020001',
-          room: 'Room A-101', status: 'Active', lastCheck: '15/01/2024', nextCheck: '15/10/2025'
-        },
-        {
-          id: 'EQ-1002', name: 'High-Speed Centrifuge', type: 'Centrifuge', category: 'Sample Processing',
-          manufacturer: 'Eppendorf', model: '5430R', serialNumber: 'EP5430R002',
-          room: 'Room A-102', status: 'In Use', lastCheck: '15/01/2024', nextCheck: '15/10/2025'
-        },
-        {
-          id: 'EQ-1003', name: 'UV Spectrophotometer', type: 'Spectrophotometer', category: 'Analysis',
-          manufacturer: 'Thermo Scientific', model: 'Evolution 201', serialNumber: 'TS201003',
-          room: 'Room A-103', status: 'In Use', lastCheck: '15/01/2024', nextCheck: '15/10/2025'
-        },
-        {
-          id: 'EQ-1004', name: 'pH Meter Basic', type: 'pH Meter', category: 'Measurement',
-          manufacturer: 'Hanna Instruments', model: 'HI-98103', serialNumber: 'HI98103004',
-          room: 'Room A-101', status: 'Maintenance', lastCheck: '15/01/2024', nextCheck: '15/10/2025'
-        }
-      ]
-      setEquipments(mockEquipments)
+      const response = await instrumentAPI.getAll()
+      const instruments = response.data.instruments || []
+      
+      const formattedEquipments: Equipment[] = instruments.map((inst: Instrument) => ({
+        id: inst.instrument_id,
+        name: inst.name,
+        type: inst.type,
+        category: inst.category || '',
+        manufacturer: inst.manufacturer || '',
+        model: inst.model || '',
+        serialNumber: inst.serial_number || '',
+        room: inst.room || '',
+        status: inst.status as Equipment['status'],
+        lastCheck: inst.last_check ? new Date(inst.last_check).toLocaleDateString('en-GB') : 'N/A',
+        nextCheck: inst.next_check ? new Date(inst.next_check).toLocaleDateString('en-GB') : 'N/A'
+      }))
+      
+      setEquipments(formattedEquipments)
       
       // Generate equipment status data
       const statusData = [
-        { name: 'Active', value: mockEquipments.filter(e => e.status === 'Active').length, color: '#10B981' },
-        { name: 'In Use', value: mockEquipments.filter(e => e.status === 'In Use').length, color: '#F59E0B' },
-        { name: 'Maintenance', value: mockEquipments.filter(e => e.status === 'Maintenance').length, color: '#EF4444' }
+        { name: 'Available', value: formattedEquipments.filter(e => e.status === 'Available').length, color: '#10B981' },
+        { name: 'In Use', value: formattedEquipments.filter(e => e.status === 'In Use').length, color: '#F59E0B' },
+        { name: 'Maintenance', value: formattedEquipments.filter(e => e.status === 'Maintenance').length, color: '#EF4444' },
+        { name: 'Out of Service', value: formattedEquipments.filter(e => e.status === 'Out of Service').length, color: '#6B7280' }
       ]
       setEquipmentStatusData(statusData)
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading equipments:', error)
+      toast.error(error.response?.data?.message || 'Lỗi khi tải danh sách thiết bị')
+      // Fallback to empty array on error
+      setEquipments([])
+      setEquipmentStatusData([])
     }
   }
 
@@ -255,7 +307,7 @@ function Dashboard() {
   // Calculate statistics from data
   const stats = {
     totalEquipments: equipments.length,
-    activeEquipments: equipments.filter(e => e.status === 'Active').length,
+    activeEquipments: equipments.filter(e => e.status === 'Available' || e.status === 'In Use').length,
     maintenanceEquipments: equipments.filter(e => e.status === 'Maintenance').length,
     totalReagents: reagentHistory.length,
     activeReagents: reagentHistory.filter(r => r.status === 'Active').length,
@@ -265,128 +317,176 @@ function Dashboard() {
   }
 
   const getStatusBadge = (status: string) => {
-    const baseClasses = "px-3 py-1 text-xs font-medium rounded-full flex items-center gap-1"
+    const baseClasses = "px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap"
     switch (status) {
+      case 'Available':
       case 'Active':
         return (
-          <span className={`${baseClasses} bg-green-100 text-green-800`}>
-            <CheckCircle className="h-3 w-3" />
-            Active
+          <span className={`${baseClasses} ${isDarkMode ? 'bg-green-900/50 text-green-300' : 'bg-green-100 text-green-800'}`}>
+            <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">{status === 'Available' ? 'Available' : 'Active'}</span>
           </span>
         )
       case 'In Use':
         return (
-          <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>
-            <Activity className="h-3 w-3" />
-            In Use
+          <span className={`${baseClasses} ${isDarkMode ? 'bg-yellow-900/50 text-yellow-300' : 'bg-yellow-100 text-yellow-800'}`}>
+            <Activity className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">In Use</span>
           </span>
         )
       case 'Maintenance':
         return (
-          <span className={`${baseClasses} bg-red-100 text-red-800`}>
-            <Wrench className="h-3 w-3" />
-            Maintenance  
+          <span className={`${baseClasses} ${isDarkMode ? 'bg-red-900/50 text-red-300' : 'bg-red-100 text-red-800'}`}>
+            <Wrench className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Maintenance</span>
+          </span>
+        )
+      case 'Out of Service':
+        return (
+          <span className={`${baseClasses} ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800'}`}>
+            <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Out of Service</span>
           </span>
         )
       case 'Expiring Soon':
         return (
-          <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>
-            <Clock className="h-3 w-3" />
-            Expiring Soon
+          <span className={`${baseClasses} ${isDarkMode ? 'bg-yellow-900/50 text-yellow-300' : 'bg-yellow-100 text-yellow-800'}`}>
+            <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Expiring Soon</span>
           </span>
         )
       case 'Expired':
         return (
-          <span className={`${baseClasses} bg-red-100 text-red-800`}>
-            <XCircle className="h-3 w-3" />
-            Expired
+          <span className={`${baseClasses} ${isDarkMode ? 'bg-red-900/50 text-red-300' : 'bg-red-100 text-red-800'}`}>
+            <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Expired</span>
           </span>
         )
       default:
-        return <span className={`${baseClasses} bg-gray-100 text-gray-800`}>{status}</span>
+        return <span className={`${baseClasses} ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800'}`}>{status}</span>
     }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-lg text-gray-600">Loading Dashboard...</p>
-        </div>
+  return loading ? (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-lg text-gray-600">Loading Dashboard...</p>
       </div>
-    )
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-6">
+    </div>
+  ) : (
+    <div className={`min-h-screen p-6 transition-colors duration-300 ${
+      isDarkMode 
+        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' 
+        : 'bg-gradient-to-br from-blue-50 via-white to-indigo-50'
+    }`}>
       {/* Enhanced Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl shadow-xl p-8 mb-8 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-              <BarChart3 className="h-8 w-8" />
+      <div className={`rounded-2xl shadow-xl p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 text-white transition-colors duration-300 ${
+        isDarkMode 
+          ? 'bg-gradient-to-r from-gray-800 to-gray-700' 
+          : 'bg-gradient-to-r from-blue-600 to-indigo-700'
+      }`}>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-xl backdrop-blur-sm flex-shrink-0">
+              <BarChart3 className="h-6 w-6 sm:h-8 sm:w-8" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold mb-2">Laboratory Management Dashboard</h1>
-              <p className="text-blue-100 text-lg">Overview of equipments, reagents, and system activities</p>
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1 sm:mb-2">Laboratory Management Dashboard</h1>
+              <p className="text-blue-100 text-sm sm:text-base lg:text-lg">Overview of equipments, reagents, and system activities</p>
             </div>
           </div>
-          <div className="hidden lg:block">
-            <div className="text-right">
-              <div className="text-2xl font-bold">{stats.totalEvents}</div>
-              <div className="text-blue-200">Today's Events</div>
+          <div className="flex lg:block justify-end">
+            <div className="text-center lg:text-right bg-white/10 lg:bg-transparent rounded-lg p-3 lg:p-0">
+              <div className="text-xl sm:text-2xl font-bold">{stats.todayEvents}</div>
+              <div className="text-blue-200 text-sm">Today's Events</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Statistics Dashboard */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+        <div className={`rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all duration-300 ${
+          isDarkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-white border-gray-100'
+        }`}>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Equipment</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalEquipments}</p>
-              <p className="text-sm text-green-600 font-medium mt-1">
-                <TrendingUp className="inline h-4 w-4 mr-1" />
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs sm:text-sm font-medium transition-colors duration-300 ${
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>Total Equipment</p>
+              <p className={`text-xl sm:text-2xl font-bold transition-colors duration-300 truncate ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>{stats.totalEquipments}</p>
+              <p className="text-xs sm:text-sm text-green-600 font-medium mt-1">
+                <TrendingUp className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 {stats.activeEquipments} Active
               </p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <Settings className="h-6 w-6 text-blue-600" />
+            <div className={`p-2 sm:p-3 rounded-full transition-colors duration-300 flex-shrink-0 ${
+              isDarkMode ? 'bg-blue-800' : 'bg-blue-100'
+            }`}>
+              <Settings className={`h-5 w-5 sm:h-6 sm:w-6 transition-colors duration-300 ${
+                isDarkMode ? 'text-blue-300' : 'text-blue-600'  
+              }`} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300">
+        <div className={`rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all duration-300 ${
+          isDarkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-white border-gray-100'
+        }`}>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Reagents</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalReagents}</p>
-              <p className="text-sm text-yellow-600 font-medium mt-1">
-                <AlertTriangle className="inline h-4 w-4 mr-1" />
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs sm:text-sm font-medium transition-colors duration-300 ${
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>Total Reagents</p>
+              <p className={`text-xl sm:text-2xl font-bold transition-colors duration-300 truncate ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>{stats.totalReagents}</p>
+              <p className="text-xs sm:text-sm text-yellow-600 font-medium mt-1">
+                <AlertTriangle className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 {stats.expiringReagents} Expiring
               </p>
             </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <Beaker className="h-6 w-6 text-green-600" />
+            <div className={`p-2 sm:p-3 rounded-full transition-colors duration-300 flex-shrink-0 ${
+              isDarkMode ? 'bg-green-800' : 'bg-green-100'
+            }`}>
+              <Beaker className={`h-5 w-5 sm:h-6 sm:w-6 transition-colors duration-300 ${
+                isDarkMode ? 'text-green-300' : 'text-green-600'
+              }`} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300">
+        <div className={`rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all duration-300 sm:col-span-2 lg:col-span-1 ${
+          isDarkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-white border-gray-100'
+        }`}>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">System Events</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalEvents}</p>
-              <p className="text-sm text-blue-600 font-medium mt-1">
-                <Activity className="inline h-4 w-4 mr-1" />
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs sm:text-sm font-medium transition-colors duration-300 ${
+                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+              }`}>System Events</p>
+              <p className={`text-xl sm:text-2xl font-bold transition-colors duration-300 truncate ${
+                isDarkMode ? 'text-white' : 'text-gray-900'
+              }`}>{stats.totalEvents}</p>
+              <p className="text-xs sm:text-sm text-blue-600 font-medium mt-1">
+                <Activity className="inline h-3 w-3 sm:h-4 sm:w-4 mr-1" />
                 Recent Activity
               </p>
             </div>
-            <div className="p-3 bg-slate-100 rounded-full">
-              <FileText className="h-6 w-6 text-slate-600" />
+            <div className={`p-2 sm:p-3 rounded-full transition-colors duration-300 flex-shrink-0 ${
+              isDarkMode ? 'bg-slate-700' : 'bg-slate-100'
+            }`}>
+              <FileText className={`h-5 w-5 sm:h-6 sm:w-6 transition-colors duration-300 ${
+                isDarkMode ? 'text-slate-300' : 'text-slate-600'
+              }`} />
             </div>
           </div>
         </div>
@@ -394,36 +494,68 @@ function Dashboard() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 sm:gap-8">
         {/* Equipment Overview */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
-          <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl border-b border-gray-100">
-            <div className="flex items-center justify-between">
+        <div className={`rounded-xl shadow-sm border hover:shadow-md transition-all duration-300 ${
+          isDarkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-white border-gray-100'
+        }`}>
+          <div className={`p-4 sm:p-6 rounded-t-xl border-b transition-colors duration-300 ${
+            isDarkMode 
+              ? 'bg-gradient-to-r from-gray-700 to-gray-800 border-gray-700' 
+              : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-gray-100'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Settings className="w-5 h-5 text-blue-600" />
+                <div className={`p-2 rounded-lg transition-colors duration-300 flex-shrink-0 ${
+                  isDarkMode ? 'bg-blue-800' : 'bg-blue-100'
+                }`}>
+                  <Settings className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors duration-300 ${
+                    isDarkMode ? 'text-blue-300' : 'text-blue-600'
+                  }`} />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Equipment Status</h3>
-                  <p className="text-sm text-gray-600">Current status of laboratory instruments</p>
+                <div className="min-w-0">
+                  <h3 className={`text-base sm:text-lg font-semibold transition-colors duration-300 ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Equipment Status</h3>
+                  <p className={`text-xs sm:text-sm transition-colors duration-300 truncate ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                  }`}>Current status of laboratory instruments</p>
                 </div>
               </div>
               <div className="flex space-x-2">
                 <div className="relative group">
-                  <button className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md flex items-center space-x-1">
-                    <Download className="w-4 h-4" />
-                    <span>Export</span>
+                  <button className={`text-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md flex items-center space-x-1 ${
+                    isDarkMode 
+                      ? 'bg-green-700 hover:bg-green-800' 
+                      : 'bg-green-600 hover:bg-green-700'
+                  }`}>
+                    <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden xs:inline">Export</span>
                   </button>
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 min-w-[120px]">
+                  <div className={`absolute top-full left-0 mt-1 border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 min-w-[120px] ${
+                    isDarkMode 
+                      ? 'bg-gray-800 border-gray-700' 
+                      : 'bg-white border-gray-200'
+                  }`}>
                     <button 
                       onClick={() => handleExportEquipment('excel')}
-                      className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+                      className={`block w-full text-left px-3 py-2 text-xs sm:text-sm rounded-t-lg transition-colors duration-200 ${
+                        isDarkMode 
+                          ? 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       Export Excel
                     </button>
                     <button 
                       onClick={() => handleExportEquipment('pdf')}
-                      className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg"
+                      className={`block w-full text-left px-3 py-2 text-xs sm:text-sm rounded-b-lg transition-colors duration-200 ${
+                        isDarkMode 
+                          ? 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       Export PDF
                     </button>
@@ -431,25 +563,31 @@ function Dashboard() {
                 </div>
                 <button 
                   onClick={() => navigate('/doctor/instrument')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
+                  className={`text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 shadow-sm hover:shadow-md ${
+                    isDarkMode 
+                      ? 'bg-blue-700 hover:bg-blue-800'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
                   View All
                 </button>
               </div>
             </div>
           </div>
-          <div className="p-6">
+          <div className={`p-4 sm:p-6 transition-colors duration-300 ${
+            isDarkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
             {/* Equipment Status Chart */}
             <div className="mb-6">
-              <div className="h-48">
+              <div className="h-40 sm:h-48">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={equipmentStatusData}
                       cx="50%"
                       cy="50%"
-                      innerRadius={40}
-                      outerRadius={80}
+                      innerRadius={30}
+                      outerRadius={60}
                       paddingAngle={3}
                       dataKey="value"
                       animationBegin={0}
@@ -466,11 +604,12 @@ function Dashboard() {
                     </Pie>
                     <Tooltip 
                       contentStyle={{
-                        backgroundColor: '#FFFFFF',
-                        border: '1px solid #E5E7EB',
+                        backgroundColor: isDarkMode ? '#374151' : '#FFFFFF',
+                        border: `1px solid ${isDarkMode ? '#4B5563' : '#E5E7EB'}`,
                         borderRadius: '8px',
                         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                        fontSize: '12px'
+                        fontSize: '12px',
+                        color: isDarkMode ? '#F9FAFB' : '#111827'
                       }}
                     />
                   </PieChart>
@@ -480,20 +619,28 @@ function Dashboard() {
             
             {/* Recent Equipment */}
             <div>
-              <h4 className="text-base font-semibold text-gray-800 mb-4">Recent Equipment</h4>
-              <div className="space-y-3">
+              <h4 className={`text-sm sm:text-base font-semibold mb-3 sm:mb-4 transition-colors duration-300 ${
+                isDarkMode ? 'text-gray-200' : 'text-gray-800'
+              }`}>Recent Equipment</h4>
+              <div className="space-y-2 sm:space-y-3">
                 {equipments.slice(0, 3).map((equipment) => (
-                  <div key={equipment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <Settings className="h-4 w-4 text-blue-600" />
+                  <div key={equipment.id} className={`flex items-center justify-between p-2 sm:p-3 rounded-lg transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'bg-gray-700 hover:bg-gray-600' 
+                      : 'bg-gray-50 hover:bg-gray-100'
+                  }`}>
+                    <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                      <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                        <Settings className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{equipment.name}</div>
-                        <div className="text-xs text-gray-500">{equipment.room}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-xs sm:text-sm font-medium truncate ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{equipment.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{equipment.room}</div>
                       </div>
                     </div>
-                    {getStatusBadge(equipment.status)}
+                    <div className="flex-shrink-0 ml-2">
+                      {getStatusBadge(equipment.status)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -502,34 +649,62 @@ function Dashboard() {
         </div>
 
         {/* Event Log Analytics */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
-          <div className="p-6 bg-gradient-to-r from-slate-50 to-gray-50 rounded-t-xl border-b border-gray-100">
-            <div className="flex items-center justify-between">
+        <div className={`rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ${
+          isDarkMode 
+            ? 'bg-gray-800 border border-gray-700' 
+            : 'bg-white border border-gray-100'
+        }`}>
+          <div className={`p-4 sm:p-6 rounded-t-xl border-b ${
+            isDarkMode 
+              ? 'bg-gradient-to-r from-gray-700 to-gray-800 border-gray-700' 
+              : 'bg-gradient-to-r from-slate-50 to-gray-50 border-gray-100'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-slate-100 rounded-lg">
-                  <FileText className="w-5 h-5 text-slate-600" />
+                <div className={`p-2 rounded-lg flex-shrink-0 ${
+                  isDarkMode ? 'bg-gray-600' : 'bg-slate-100'
+                }`}>
+                  <FileText className={`w-4 h-4 sm:w-5 sm:h-5 ${
+                    isDarkMode ? 'text-gray-300' : 'text-slate-600'
+                  }`} />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Event Log Analytics</h3>
-                  <p className="text-sm text-gray-600">System activities and audit trail</p>
+                <div className="min-w-0">
+                  <h3 className={`text-base sm:text-lg font-semibold ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Event Log Analytics</h3>
+                  <p className={`text-xs sm:text-sm truncate ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  }`}>System activities and audit trail</p>
                 </div>
               </div>
               <div className="flex space-x-2">
                 <div className="relative group">
-                  <button className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md flex items-center space-x-1">
-                    <Download className="w-4 h-4" />
-                    <span>Export</span>
+                  <button className="bg-green-600 hover:bg-green-700 text-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md flex items-center space-x-1">
+                    <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden xs:inline">Export</span>
                   </button>
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 min-w-[120px]">
+                  <div className={`absolute top-full left-0 mt-1 border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 min-w-[120px] ${
+                    isDarkMode 
+                      ? 'bg-gray-800 border-gray-700' 
+                      : 'bg-white border-gray-200'
+                  }`}>
                     <button 
                       onClick={() => handleExportEventLog('excel')}
-                      className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+                      className={`block w-full text-left px-3 py-2 text-xs sm:text-sm rounded-t-lg transition-colors ${
+                        isDarkMode 
+                          ? 'text-gray-300 hover:bg-gray-700' 
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       Export Excel
                     </button>
                     <button 
                       onClick={() => handleExportEventLog('pdf')}
-                      className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg"
+                      className={`block w-full text-left px-3 py-2 text-xs sm:text-sm rounded-b-lg transition-colors ${
+                        isDarkMode 
+                          ? 'text-gray-300 hover:bg-gray-700' 
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       Export PDF
                     </button>
@@ -537,85 +712,84 @@ function Dashboard() {
                 </div>
                 <button 
                   onClick={() => navigate('/doctor/event-log')}
-                  className="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
+                  className="bg-slate-600 hover:bg-slate-700 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
                 >
                   View All
                 </button>
               </div>
             </div>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {/* Event Timeline Chart */}
             <div className="mb-6">
-              <div className="h-48">
+              <div className="h-40 sm:h-48">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart 
+                  <BarChart 
                     data={eventStats}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                    margin={{ top: 10, right: 10, left: -10, bottom: 0 }}
                   >
-                    <defs>
-                      <linearGradient id="colorEvents" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#64748B" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#64748B" stopOpacity={0.1}/>
-                      </linearGradient>
-                    </defs>
                     <CartesianGrid 
                       strokeDasharray="3 3" 
-                      stroke="#E5E7EB" 
+                      stroke={isDarkMode ? '#374151' : '#E5E7EB'}
                       strokeOpacity={0.5}
                     />
                     <XAxis 
                       dataKey="date" 
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: '#6B7280' }}
+                      tick={{ fontSize: 10, fill: isDarkMode ? '#9CA3AF' : '#6B7280' }}
                     />
                     <YAxis 
                       axisLine={false}
                       tickLine={false}
-                      tick={{ fontSize: 12, fill: '#6B7280' }}
+                      tick={{ fontSize: 10, fill: isDarkMode ? '#9CA3AF' : '#6B7280' }}
+                      allowDecimals={false}
                     />
                     <Tooltip 
                       contentStyle={{
-                        backgroundColor: '#FFFFFF',
-                        border: '1px solid #E5E7EB',
+                        backgroundColor: isDarkMode ? '#1F2937' : '#FFFFFF',
+                        border: `1px solid ${isDarkMode ? '#374151' : '#E5E7EB'}`,
                         borderRadius: '8px',
                         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                        fontSize: '12px'
+                        fontSize: '12px',
+                        color: isDarkMode ? '#F3F4F6' : '#111827'
                       }}
                     />
-                    <Area 
-                      type="monotone" 
+                    <Bar 
                       dataKey="events" 
-                      stroke="#64748B" 
-                      strokeWidth={3}
-                      fill="url(#colorEvents)"
-                      dot={{ 
-                        fill: '#64748B', 
-                        strokeWidth: 2, 
-                        r: 4,
-                        stroke: '#FFFFFF'
-                      }}
+                      fill="#64748B"
+                      radius={[8, 8, 0, 0]}
+                      maxBarSize={60}
                     />
-                  </AreaChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
             
             {/* Event Types Summary */}
             <div>
-              <h4 className="text-base font-semibold text-gray-800 mb-4">Event Types Distribution</h4>
-              <div className="space-y-3">
+              <h4 className={`text-sm sm:text-base font-semibold mb-3 sm:mb-4 ${
+                isDarkMode ? 'text-gray-200' : 'text-gray-800'
+              }`}>Event Types Distribution</h4>
+              <div className="space-y-2 sm:space-y-3">
                 {eventTypeData.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-3">
+                  <div key={index} className={`flex items-center justify-between p-2 sm:p-3 rounded-lg ${
+                    isDarkMode ? 'bg-gray-700' : 'bg-gray-50'
+                  }`}>
+                    <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
                       <div 
-                        className="w-4 h-4 rounded-full shadow-sm" 
+                        className="w-3 h-3 sm:w-4 sm:h-4 rounded-full shadow-sm flex-shrink-0" 
                         style={{ backgroundColor: item.color }}
                       ></div>
-                      <span className="text-sm font-medium text-gray-700">{item.name}</span>
+                      <span className={`text-xs sm:text-sm font-medium truncate ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>{item.name}</span>
                     </div>
-                    <span className="text-sm font-bold text-gray-900 bg-white px-3 py-1 rounded-full shadow-sm">
+                    <span className={`text-xs sm:text-sm font-bold px-2 sm:px-3 py-1 rounded-full shadow-sm flex-shrink-0 ${
+                      isDarkMode 
+                        ? 'text-white bg-gray-600' 
+                        : 'text-gray-900 bg-white'
+                    }`}>
                       {item.value}
                     </span>
                   </div>
@@ -626,34 +800,60 @@ function Dashboard() {
         </div>
 
         {/* Reagent History Overview */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
-          <div className="p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-t-xl border-b border-gray-100">
-            <div className="flex items-center justify-between">
+        <div className={`rounded-xl shadow-sm hover:shadow-md transition-all duration-300 ${
+          isDarkMode 
+            ? 'bg-gray-800 border border-gray-700' 
+            : 'bg-white border border-gray-100'
+        }`}>
+          <div className={`p-4 sm:p-6 rounded-t-xl border-b ${
+            isDarkMode 
+              ? 'bg-gradient-to-r from-green-900/30 to-emerald-900/30 border-gray-700' 
+              : 'bg-gradient-to-r from-green-50 to-emerald-50 border-gray-100'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Beaker className="w-5 h-5 text-green-600" />
+                <div className={`p-2 rounded-lg flex-shrink-0 ${
+                  isDarkMode ? 'bg-green-900/50' : 'bg-green-100'
+                }`}>
+                  <Beaker className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Reagent Inventory</h3>
-                  <p className="text-sm text-gray-600">Chemical supplies and reagents status</p>
+                <div className="min-w-0">
+                  <h3 className={`text-base sm:text-lg font-semibold ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Reagent Inventory</h3>
+                  <p className={`text-xs sm:text-sm truncate ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  }`}>Chemical supplies and reagents status</p>
                 </div>
               </div>
               <div className="flex space-x-2">
                 <div className="relative group">
-                  <button className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md flex items-center space-x-1">
-                    <Download className="w-4 h-4" />
-                    <span>Export</span>
+                  <button className="bg-orange-600 hover:bg-orange-700 text-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md flex items-center space-x-1">
+                    <Download className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden xs:inline">Export</span>
                   </button>
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 min-w-[120px]">
+                  <div className={`absolute top-full left-0 mt-1 border rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 min-w-[120px] ${
+                    isDarkMode 
+                      ? 'bg-gray-800 border-gray-700' 
+                      : 'bg-white border-gray-200'
+                  }`}>
                     <button 
                       onClick={() => handleExportReagent('excel')}
-                      className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
+                      className={`block w-full text-left px-3 py-2 text-xs sm:text-sm rounded-t-lg transition-colors ${
+                        isDarkMode 
+                          ? 'text-gray-300 hover:bg-gray-700' 
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       Export Excel
                     </button>
                     <button 
                       onClick={() => handleExportReagent('pdf')}
-                      className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg"
+                      className={`block w-full text-left px-3 py-2 text-xs sm:text-sm rounded-b-lg transition-colors ${
+                        isDarkMode 
+                          ? 'text-gray-300 hover:bg-gray-700' 
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
                     >
                       Export PDF
                     </button>
@@ -661,50 +861,68 @@ function Dashboard() {
                 </div>
                 <button 
                   onClick={() => navigate('/doctor/reagent-history')}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
+                  className="bg-green-600 hover:bg-green-700 text-white px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 shadow-sm hover:shadow-md"
                 >
                   View All
                 </button>
               </div>
             </div>
           </div>
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             {/* Reagent Status Summary */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{stats.activeReagents}</div>
-                <div className="text-xs text-green-600 font-medium">Active</div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
+              <div className={`text-center p-2 sm:p-4 rounded-lg ${
+                isDarkMode ? 'bg-green-900/30' : 'bg-green-50'
+              }`}>
+                <div className="text-lg sm:text-2xl font-bold text-green-600">{stats.activeReagents}</div>
+                <div className="text-[10px] sm:text-xs text-green-600 font-medium">Active</div>
               </div>
-              <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600">{stats.expiringReagents}</div>
-                <div className="text-xs text-yellow-600 font-medium">Expiring</div>
+              <div className={`text-center p-2 sm:p-4 rounded-lg ${
+                isDarkMode ? 'bg-yellow-900/30' : 'bg-yellow-50'
+              }`}>
+                <div className="text-lg sm:text-2xl font-bold text-yellow-600">{stats.expiringReagents}</div>
+                <div className="text-[10px] sm:text-xs text-yellow-600 font-medium">Expiring</div>
               </div>
-              <div className="text-center p-4 bg-red-50 rounded-lg">
-                <div className="text-2xl font-bold text-red-600">
+              <div className={`text-center p-2 sm:p-4 rounded-lg ${
+                isDarkMode ? 'bg-red-900/30' : 'bg-red-50'
+              }`}>
+                <div className="text-lg sm:text-2xl font-bold text-red-600">
                   {reagentHistory.filter(r => r.status === 'Expired').length}
                 </div>
-                <div className="text-xs text-red-600 font-medium">Expired</div>
+                <div className="text-[10px] sm:text-xs text-red-600 font-medium">Expired</div>
               </div>
             </div>
             
             {/* Recent Reagents */}
             <div>
-              <h4 className="text-base font-semibold text-gray-800 mb-4">Recent Reagents</h4>
-              <div className="space-y-3">
+              <h4 className={`text-sm sm:text-base font-semibold mb-3 sm:mb-4 ${
+                isDarkMode ? 'text-gray-200' : 'text-gray-800'
+              }`}>Recent Reagents</h4>
+              <div className="space-y-2 sm:space-y-3">
                 {reagentHistory.slice(0, 4).map((reagent) => (
-                  <div key={reagent.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <Package className="h-4 w-4 text-green-600" />
+                  <div key={reagent.id} className={`flex items-center justify-between p-2 sm:p-3 rounded-lg transition-colors ${
+                    isDarkMode 
+                      ? 'bg-gray-700 hover:bg-gray-600' 
+                      : 'bg-gray-50 hover:bg-gray-100'
+                  }`}>
+                    <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                      <div className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${
+                        isDarkMode ? 'bg-green-900/50' : 'bg-green-100'
+                      }`}>
+                        <Package className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{reagent.lotNumber}</div>
-                        <div className="text-xs text-gray-500">{reagent.supplier}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-xs sm:text-sm font-medium truncate ${
+                          isDarkMode ? 'text-white' : 'text-gray-900'
+                        }`}>{reagent.lotNumber}</div>
+                        <div className={`text-[10px] sm:text-xs truncate ${
+                          isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        }`}>{reagent.supplier}</div>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex-shrink-0 ml-2">
                       {getStatusBadge(reagent.status)}
-                      <div className="text-xs text-gray-500 mt-1">Exp: {reagent.date}</div>
+                      <div className="text-[10px] sm:text-xs text-gray-500 mt-1">Exp: {reagent.date}</div>
                     </div>
                   </div>
                 ))}
@@ -714,56 +932,92 @@ function Dashboard() {
         </div>
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-300">
-          <div className="p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-t-xl border-b border-gray-100">
+        <div className={`rounded-xl shadow-sm border hover:shadow-md transition-all duration-300 ${
+          isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+        }`}>
+          <div className={`p-4 sm:p-6 rounded-t-xl border-b ${
+            isDarkMode 
+              ? 'bg-gradient-to-r from-purple-900/20 to-indigo-900/20 border-gray-700'
+              : 'bg-gradient-to-r from-purple-50 to-indigo-50 border-gray-100'
+          }`}>
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Activity className="w-5 h-5 text-purple-600" />
+              <div className={`p-2 rounded-lg flex-shrink-0 ${isDarkMode ? 'bg-purple-900/50' : 'bg-purple-100'}`}>
+                <Activity className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-                <p className="text-sm text-gray-600">Frequently used laboratory functions</p>
+                <h3 className={`text-base sm:text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Quick Actions</h3>
+                <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Frequently used laboratory functions</p>
               </div>
             </div>
           </div>
-          <div className="p-6">
-            <div className="grid grid-cols-1 gap-4">
+          <div className="p-4 sm:p-6">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
               <button 
                 onClick={() => navigate('/doctor/instrument')}
-                className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-left"
+                className={`flex items-center space-x-3 p-3 sm:p-4 border rounded-lg transition-all duration-200 text-left ${
+                  isDarkMode
+                    ? 'border-gray-600 hover:bg-gray-700 hover:border-gray-500'
+                    : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }`}
               >
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <Settings className="h-5 w-5 text-blue-600" />
+                <div className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${
+                  isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100'
+                }`}>
+                  <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                 </div>
-                <div>
-                  <div className="font-medium text-gray-900">Manage Equipment</div>
-                  <div className="text-sm text-gray-500">Add, edit, and monitor instruments</div>
+                <div className="min-w-0 flex-1">
+                  <div className={`font-medium text-sm sm:text-base ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Manage Equipment</div>
+                  <div className={`text-xs sm:text-sm ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>Add, edit, and monitor instruments</div>
                 </div>
               </button>
               
               <button 
                 onClick={() => navigate('/doctor/reagent-history')}
-                className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-left"
+                className={`flex items-center space-x-3 p-3 sm:p-4 border rounded-lg transition-all duration-200 text-left ${
+                  isDarkMode
+                    ? 'border-gray-600 hover:bg-gray-700 hover:border-gray-500'
+                    : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }`}
               >
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <Beaker className="h-5 w-5 text-green-600" />
+                <div className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${
+                  isDarkMode ? 'bg-green-900/50' : 'bg-green-100'
+                }`}>
+                  <Beaker className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 </div>
-                <div>
-                  <div className="font-medium text-gray-900">Reagent Management</div>
-                  <div className="text-sm text-gray-500">Track supplies and inventory</div>
+                <div className="min-w-0 flex-1">
+                  <div className={`font-medium text-sm sm:text-base ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Reagent Management</div>
+                  <div className={`text-xs sm:text-sm ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>Track supplies and inventory</div>
                 </div>
               </button>
               
               <button 
                 onClick={() => navigate('/doctor/event-log')}
-                className="flex items-center space-x-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-left"
+                className={`flex items-center space-x-3 p-3 sm:p-4 border rounded-lg transition-all duration-200 text-left ${
+                  isDarkMode
+                    ? 'border-gray-600 hover:bg-gray-700 hover:border-gray-500'
+                    : 'border-gray-200 hover:bg-gray-50 hover:border-gray-300'
+                }`}
               >
-                <div className="p-2 bg-slate-100 rounded-lg">
-                  <FileText className="h-5 w-5 text-slate-600" />
+                <div className={`p-1.5 sm:p-2 rounded-lg flex-shrink-0 ${
+                  isDarkMode ? 'bg-slate-700' : 'bg-slate-100'
+                }`}>
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-slate-600" />
                 </div>
-                <div>
-                  <div className="font-medium text-gray-900">System Logs</div>
-                  <div className="text-sm text-gray-500">Monitor system activities</div>
+                <div className="min-w-0 flex-1">
+                  <div className={`font-medium text-sm sm:text-base ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>System Logs</div>
+                  <div className={`text-xs sm:text-sm ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>Monitor system activities</div>
                 </div>
               </button>
               

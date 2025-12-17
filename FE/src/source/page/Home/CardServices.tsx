@@ -1,5 +1,7 @@
 
 
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
+
 interface CardServicesProps {
     title: string;
     description: string;
@@ -8,6 +10,7 @@ interface CardServicesProps {
 }
 
 function CardServices({ title, description, icon, features }: CardServicesProps) {
+    const { isDarkMode: _isDarkMode } = useGlobalTheme();
     return (
         <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-sm border border-gray-200 dark:border-gray-700 p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center gap-4 mb-4">

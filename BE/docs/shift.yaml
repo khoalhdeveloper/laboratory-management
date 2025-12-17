@@ -1,0 +1,323 @@
+tags:
+  - name: Shifts
+    description: API quản lý lịch làm việc & phân ca
+
+paths:
+  /api/shifts/createShift:
+    post:
+      summary: Tạo ca làm việc (Admin)
+      tags: [Shifts]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, date, start_time, end_time]
+              properties:
+                title:
+                  type: string
+                date:
+                  type: string
+                  format: date
+                start_time:
+                  type: string
+                  example: "08:00"
+                end_time:
+                  type: string
+                  example: "16:00"
+                department:
+                  type: string
+                instrument_id:
+                  type: string
+                assigned_users:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/AssignedUser"
+                notes:
+                  type: string
+      responses:
+        201:
+          description: Tạo ca thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Shift"
+        400:
+          description: Thiếu tham số bắt buộc
+        500:
+          description: Lỗi server
+
+  /api/shifts:
+    get:
+      summary: Xem danh sách ca (lọc và phân trang)
+      tags: [Shifts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+        - in: query
+          name: userid
+          schema: { type: string }
+        - in: query
+          name: instrument_id
+          schema: { type: string }
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [planned, published, cancelled]
+        - in: query
+          name: department
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        200:
+          description: Lấy danh sách ca thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  total:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Shift"
+        500:
+          description: Lỗi server
+
+  /api/shifts/my:
+    get:
+      summary: Xem ca của tôi
+      tags: [Shifts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: date_from
+          schema: { type: string, format: date }
+        - in: query
+          name: date_to
+          schema: { type: string, format: date }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20 }
+      responses:
+        200:
+          description: Lấy ca của tôi thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  total:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Shift"
+        401:
+          description: Chưa đăng nhập
+        500:
+          description: Lỗi server
+
+  /api/shifts/updateShift/{shift_id}:
+    put:
+      summary: Cập nhật ca (Admin)
+      tags: [Shifts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shift_id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Shift"
+      responses:
+        200:
+          description: Cập nhật ca thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Shift"
+        404:
+          description: Không tìm thấy ca
+        500:
+          description: Lỗi server
+  /api/shifts/cancelShift/{shift_id}:          
+    delete:
+      summary: Hủy ca (Admin)
+      tags: [Shifts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shift_id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Hủy ca thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Shift"
+        404:
+          description: Không tìm thấy ca
+        500:
+          description: Lỗi server
+
+  /api/shifts/publishShift/{shift_id}:
+    put:
+      summary: Công bố ca (Admin)
+      tags: [Shifts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shift_id
+          required: true
+          schema: { type: string }
+      responses:
+        200:
+          description: Công bố ca thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Shift"
+        404:
+          description: Không tìm thấy ca
+        500:
+          description: Lỗi server
+
+  /api/shifts/assignUsers/{shift_id}:
+    put:
+      summary: Phân công nhân sự cho ca (Admin)
+      tags: [Shifts]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shift_id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assigned_users:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/AssignedUser"
+      responses:
+        200:
+          description: Phân công thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Shift"
+        404:
+          description: Không tìm thấy ca
+        500:
+          description: Lỗi server
+
+components:
+  schemas:
+    AssignedUser:
+      type: object
+      properties:
+        userid:
+          type: string
+        role:
+          type: string
+    Shift:
+      type: object
+      properties:
+        shift_id:
+          type: string
+        title:
+          type: string
+        date:
+          type: string
+          format: date-time
+        start_time:
+          type: string
+        end_time:
+          type: string
+        department:
+          type: string
+        instrument_id:
+          type: string
+        assigned_users:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssignedUser"
+        created_by:
+          type: string
+        updated_by:
+          type: string
+        notes:
+          type: string
+        status:
+          type: string
+          enum: [planned, published, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

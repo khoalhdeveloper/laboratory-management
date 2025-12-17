@@ -1,8 +1,9 @@
 const Role = require('../models/roles.model');
 
-/**
- * Get privileges of a role by role_code
- */
+// =========================================================
+//  Get privileges of a role by role_code
+// =========================================================
+
 const getRolePrivileges = async (req, res) => {
     try {
         const { roleCode } = req.params;
@@ -34,15 +35,15 @@ const getRolePrivileges = async (req, res) => {
     }
 };
 
-/**
- * Update privileges of a role by role_code
- */
+// =========================================================
+//  Update privileges of a role by role_code
+// =========================================================
 const updateRolePrivileges = async (req, res) => {
     try {
         const { roleCode } = req.params;
         const { privileges } = req.body;
         
-        // Validate input
+        
         if (!privileges || !Array.isArray(privileges)) {
             return res.status(400).json({
                 success: false,
@@ -50,7 +51,7 @@ const updateRolePrivileges = async (req, res) => {
             });
         }
         
-        // Find and update role
+        
         const role = await Role.findOneAndUpdate(
             { role: roleCode.toLowerCase() },
             { privileges: privileges },

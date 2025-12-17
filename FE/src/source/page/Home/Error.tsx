@@ -1,8 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
 
 const Error: React.FC = () => {
     const navigate = useNavigate();
+    const { isDarkMode: _isDarkMode } = useGlobalTheme();
 
     const handleGoHome = () => {
         navigate('/');

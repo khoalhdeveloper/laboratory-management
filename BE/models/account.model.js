@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const typerole = require('../constants/typerole');
+const { getVNTime } = require('../helpers/time.helper');
 const AccountSchema = new mongoose.Schema(
     {
     userid: { type: String, required: true, unique: true },
@@ -37,10 +38,11 @@ const AccountSchema = new mongoose.Schema(
         type: Number,
         default: 0
     },
-    lastLogin: { type: Date, default: Date.now }
+    lastLogin: { type: Date, default: getVNTime },
+    lastActivity: { type: Date, default: getVNTime },
 },
 {
-    timestamps: true,
+     timestamps: { currentTime: getVNTime },
     versionKey: false,
 },
 

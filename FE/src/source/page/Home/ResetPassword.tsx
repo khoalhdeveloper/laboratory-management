@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authAPI } from '../Axios/Axios';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
+import '../../../source/CSS/Loading.css';
 
 // ===== Types =====
 type NotificationType = 'success' | 'error' | '';
@@ -14,6 +16,7 @@ type NotificationState = {
 const ResetPassword: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
+    const { isDarkMode } = useGlobalTheme();
     
     // States
     const [newPassword, setNewPassword] = useState<string>('');
@@ -21,6 +24,7 @@ const ResetPassword: React.FC = () => {
     const [showNewPassword, setShowNewPassword] = useState<boolean>(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isNavigating, setIsNavigating] = useState<boolean>(false);
     const [email, setEmail] = useState<string>('');
     
     // Validation errors
@@ -68,8 +72,11 @@ const ResetPassword: React.FC = () => {
     // Check token validity on component mount
     useEffect(() => {
         if (!token) {
-            showNotification('Token không hợp lệ. Vui lòng thử lại.', 'error');
-            setTimeout(() => navigate('/login'), 2000);
+            showNotification('Invalid token. Please try again.', 'error');
+            setTimeout(() => {
+                setIsNavigating(true);
+                navigate('/login');
+            }, 2000);
             return;
         }
 
@@ -82,8 +89,11 @@ const ResetPassword: React.FC = () => {
         try {
             const tokenParts = token.split('.');
             if (tokenParts.length !== 3) {
-                showNotification('Token không hợp lệ. Vui lòng thử lại.', 'error');
-                setTimeout(() => navigate('/login'), 2000);
+                showNotification('Invalid token. Please try again.', 'error');
+                setTimeout(() => {
+                    setIsNavigating(true);
+                    navigate('/login');
+                }, 2000);
                 return;
             }
             
@@ -91,15 +101,21 @@ const ResetPassword: React.FC = () => {
             const currentTime = Math.floor(Date.now() / 1000);
             
             if (payload.exp && payload.exp < currentTime) {
-                showNotification('Token đã hết hạn. Vui lòng yêu cầu đặt lại mật khẩu mới.', 'error');
-                setTimeout(() => navigate('/login'), 2000);
+                showNotification('Token has expired. Please request a new password reset.', 'error');
+                setTimeout(() => {
+                    setIsNavigating(true);
+                    navigate('/login');
+                }, 2000);
                 return;
             }
             
-            showNotification('Vui lòng nhập mật khẩu mới của bạn.', 'success');
+            showNotification('Please enter your new password.', 'success');
         } catch (error) {
-            showNotification('Token không hợp lệ. Vui lòng thử lại.', 'error');
-            setTimeout(() => navigate('/login'), 2000);
+            showNotification('Invalid token. Please try again.', 'error');
+            setTimeout(() => {
+                setIsNavigating(true);
+                navigate('/login');
+            }, 2000);
         }
     }, [token, emailFromUrl, navigate]);
 
@@ -108,7 +124,7 @@ const ResetPassword: React.FC = () => {
         e.preventDefault();
         
         if (!token) {
-            showNotification('Token không hợp lệ. Vui lòng thử lại.', 'error');
+            showNotification('Invalid token. Please try again.', 'error');
             return;
         }
 
@@ -138,10 +154,11 @@ const ResetPassword: React.FC = () => {
             await authAPI.resetPassword(token, newPassword);
             
             
-            showNotification('Đổi mật khẩu thành công! Đang chuyển hướng...', 'success');
+            showNotification('Password changed successfully! Redirecting...', 'success');
             
             // Redirect to login after 2 seconds
             setTimeout(() => {
+                setIsNavigating(true);
                 navigate('/login', { replace: true });
             }, 2000);
             
@@ -150,11 +167,11 @@ const ResetPassword: React.FC = () => {
             if (error.response?.data?.message) {
                 showNotification(error.response.data.message, 'error');
             } else if (error.response?.status === 400) {
-                showNotification('Token không hợp lệ hoặc đã hết hạn.', 'error');
+                showNotification('Invalid or expired token.', 'error');
             } else if (error.response?.status === 404) {
-                showNotification('Yêu cầu đặt lại mật khẩu không tồn tại.', 'error');
+                showNotification('Password reset request not found.', 'error');
             } else {
-                showNotification('Không thể đặt lại mật khẩu. Vui lòng thử lại sau.', 'error');
+                showNotification('Unable to reset password. Please try again later.', 'error');
             }
         } finally {
             setIsLoading(false);
@@ -162,7 +179,27 @@ const ResetPassword: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-sky-50 to-violet-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-sky-50 to-violet-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
+            {/* Fullscreen Loading Overlay */}
+            {(isLoading || isNavigating) && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className={`flex flex-col items-center justify-center space-y-4 p-8 rounded-2xl shadow-2xl ${
+                        isDarkMode 
+                            ? 'bg-gradient-to-br from-gray-800/95 to-gray-900/95 border border-gray-700/50' 
+                            : 'bg-gradient-to-br from-white/95 to-gray-50/95 border border-gray-200/50'
+                    }`}>
+                        <div className="loader" style={{
+                            borderColor: '#000000'
+                        }}></div>
+                        <p className={`text-lg font-semibold ${
+                            isDarkMode ? 'text-white' : 'text-gray-800'
+                        }`}>
+                            {isNavigating ? 'Redirecting...' : 'Processing...'}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Notification */}
             {notification.visible && (
                 <div
@@ -180,26 +217,26 @@ const ResetPassword: React.FC = () => {
                     <h1 className="text-4xl font-bold text-transparent bg-gradient-to-r from-sky-300 to-violet-400 bg-clip-text mb-2">
                         Reset Password
                     </h1>
-                    <p className="text-gray-600">
-                        {email ? `Nhập mật khẩu mới cho ${email}` : 'Nhập mật khẩu mới của bạn'}
+                    <p className="text-gray-600 dark:text-gray-400">
+                        {email ? `Enter new password for ${email}` : 'Enter your new password'}
                     </p>
                 </div>
 
                 {/* Form */}
-                <div className="bg-white rounded-2xl shadow-xl p-8">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8">
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {/* New Password */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Mật khẩu mới
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                New Password
                             </label>
                             <div className="relative">
                                 <input
                                     type={showNewPassword ? "text" : "password"}
-                                    className={`w-full h-12 px-4 py-2 pr-12 rounded-lg border focus:outline-none focus:ring-2 focus:ring-sky-300 ${
-                                        errors.newPassword ? 'border-red-500' : 'border-gray-300'
+                                    className={`w-full h-12 px-4 py-2 pr-12 rounded-lg border focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 ${
+                                        errors.newPassword ? 'border-red-500 dark:border-red-500' : ''
                                     }`}
-                                    placeholder="Nhập mật khẩu mới"
+                                    placeholder="Enter new password"
                                     value={newPassword}
                                     onChange={(e) => {
                                         setNewPassword(e.target.value);
@@ -216,7 +253,7 @@ const ResetPassword: React.FC = () => {
                                 />
                                 <button
                                     type="button"
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none"
                                     onClick={() => setShowNewPassword(!showNewPassword)}
                                 >
                                     {showNewPassword ? (
@@ -232,22 +269,22 @@ const ResetPassword: React.FC = () => {
                                 </button>
                             </div>
                             {errors.newPassword && (
-                                <span className="text-red-500 text-sm mt-1">{errors.newPassword}</span>
+                                <span className="text-red-500 text-sm mt-1 text-left w-full block">{errors.newPassword}</span>
                             )}
                         </div>
 
                         {/* Confirm Password */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                Xác nhận mật khẩu mới
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Confirm New Password
                             </label>
                             <div className="relative">
                                 <input
                                     type={showConfirmPassword ? "text" : "password"}
-                                    className={`w-full h-12 px-4 py-2 pr-12 rounded-lg border focus:outline-none focus:ring-2 focus:ring-sky-300 ${
-                                        errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                                    className={`w-full h-12 px-4 py-2 pr-12 rounded-lg border focus:outline-none focus:ring-2 focus:ring-sky-300 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 ${
+                                        errors.confirmPassword ? 'border-red-500 dark:border-red-500' : ''
                                     }`}
-                                    placeholder="Nhập lại mật khẩu mới"
+                                    placeholder="Re-enter new password"
                                     value={confirmPassword}
                                     onChange={(e) => {
                                         setConfirmPassword(e.target.value);
@@ -264,7 +301,7 @@ const ResetPassword: React.FC = () => {
                                 />
                                 <button
                                     type="button"
-                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none"
                                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                                 >
                                     {showConfirmPassword ? (
@@ -280,7 +317,7 @@ const ResetPassword: React.FC = () => {
                                 </button>
                             </div>
                             {errors.confirmPassword && (
-                                <span className="text-red-500 text-sm mt-1">{errors.confirmPassword}</span>
+                                <span className="text-red-500 text-sm mt-1 text-left w-full block">{errors.confirmPassword}</span>
                             )}
                         </div>
 
@@ -292,14 +329,12 @@ const ResetPassword: React.FC = () => {
                         >
                             {isLoading ? (
                                 <div className="flex items-center justify-center">
-                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Đang xử lý...
+                                    <div className="loader" style={{
+                                        borderColor: '#000000'
+                                    }}></div>
                                 </div>
                             ) : (
-                                'Đặt lại mật khẩu'
+                                'Reset Password'
                             )}
                         </button>
 
@@ -307,10 +342,14 @@ const ResetPassword: React.FC = () => {
                         <div className="text-center">
                             <button
                                 type="button"
-                                onClick={() => navigate('/login')}
-                                className="text-sky-600 hover:text-sky-700 font-medium"
+                                onClick={() => {
+                                    setIsNavigating(true);
+                                    navigate('/login');
+                                }}
+                                disabled={isNavigating}
+                                className="text-sky-600 hover:text-sky-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                ← Quay lại đăng nhập
+                                ← Back to Login
                             </button>
                         </div>
                     </form>

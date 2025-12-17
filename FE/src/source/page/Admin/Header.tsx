@@ -1,56 +1,104 @@
-import { useTheme } from './context/ThemeContext';
-import { Sun, Moon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../../../components/ThemeToggle';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
+import { userAPI } from '../Axios/Axios';
 
 const Header = () => {
-    const userName = localStorage.getItem('userName') || 'Admin';
-    const { isDarkMode, toggleDarkMode } = useTheme();
+    const navigate = useNavigate();
+    const { isDarkMode } = useGlobalTheme();
+    const [userData, setUserData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadUserData = async () => {
+            try {
+                setLoading(true);
+                
+                const token = localStorage.getItem('token');
+                
+                if (!token) {
+                    navigate('/login', { replace: true });
+                    return;
+                }
+                
+                const response = await userAPI.getCurrentUser();
+                
+                let userData;
+                if (response.data && response.data.data) {
+                    userData = response.data.data;
+                } else if (response.data) {
+                    userData = response.data;
+                } else {
+                    return;
+                }
+                
+                setUserData(userData);
+            } catch (error: any) {
+                if (error.response?.status === 401) {
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('userRole');
+                    localStorage.removeItem('userId');
+                    navigate('/login', { replace: true });
+                }
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadUserData();
+
+        const handleProfileUpdate = () => {
+            loadUserData();
+        };
+
+        window.addEventListener('profileUpdated', handleProfileUpdate);
+        return () => {
+            window.removeEventListener('profileUpdated', handleProfileUpdate);
+        };
+    }, [navigate]);
+
 
     return (
-        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-6 py-5 h-24 flex items-center transition-colors duration-300">
+        <div className={`border-b px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 h-16 sm:h-20 lg:h-24 flex items-center flex-shrink-0 transition-colors duration-300 ${
+            isDarkMode 
+              ? 'bg-gray-800 border-gray-700' 
+              : 'bg-white border-gray-200'
+        }`}>
             <div className="flex justify-between items-center w-full">
-                {/* Left Section - Title */}
-                <div>
-                    <h1 className="text-2xl font-bold text-transparent bg-gradient-to-r from-sky-300 to-violet-400 bg-clip-text dark:from-sky-400 dark:to-violet-500">Admin</h1>
+                <div className="lg:ml-0 ml-12">
+                    <h1 className="text-base sm:text-xl lg:text-2xl font-bold text-transparent bg-gradient-to-r from-sky-300 to-violet-400 bg-clip-text truncate max-w-[120px] sm:max-w-none">
+                        Admin Dashboard
+                    </h1>
                 </div>
 
-                {/* Right Section - Dark Mode Toggle, Notifications and User Profile */}
-                <div className="flex items-center gap-4">
-                    {/* Dark Mode Toggle */}
-                    <button
-                        onClick={toggleDarkMode}
-                        className="p-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200 hover:scale-105"
-                        title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                    >
-                        {isDarkMode ? (
-                            <Sun className="w-6 h-6 text-yellow-500" />
-                        ) : (
-                            <Moon className="w-6 h-6 text-gray-600" />
-                        )}
-                    </button>
+                <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+                    <ThemeToggle className="p-2 sm:p-2.5 lg:p-3 rounded-lg transition-all duration-300 hover:scale-110 shadow-lg" />
 
-                    {/* Notifications */}
-                    <div className="relative">
-                        <button className="p-3 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-all duration-200">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
-                            </svg>
-                        </button>
-                        {/* Notification Badge */}
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center font-bold">
-                            3
-                        </span>
-                    </div>
-
-                    {/* User Profile */}
-                    <div className="flex items-center gap-4">
-                        {/* Avatar */}
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sky-400 to-violet-500 flex items-center justify-center text-white font-bold shadow-md">
-                            {userName.charAt(0).toUpperCase()}
-                        </div>
-
-                        {/* User Name */}
-                        <div>
-                            <span className="text-xl font-bold text-gray-900 dark:text-white">{userName}</span>
+                    <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+                        <img
+                            src={userData?.image || userData?.avatar || "https://images.pexels.com/photos/5452201/pexels-photo-5452201.jpeg?auto=compress&cs=tinysrgb&w=400"}
+                            alt={userData?.fullName || "Admin"}
+                            className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full object-cover ring-2 ring-offset-1 sm:ring-offset-2 ring-offset-transparent ring-blue-500 dark:ring-blue-400 shadow-lg hover:scale-110 transition-all duration-300"
+                            onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = "https://images.pexels.com/photos/5452201/pexels-photo-5452201.jpeg?auto=compress&cs=tinysrgb&w=400";
+                            }}
+                        />
+  
+                        <div className="hover:scale-105 transition-all duration-300 hidden sm:block">
+                            <div className={`text-sm sm:text-base lg:text-lg font-bold transition-colors duration-300 ${
+                                isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                                {loading ? 'Loading...' : (userData?.fullName || userData?.username || 'Admin')}
+                            </div>
+                            {userData?.role && (
+                                <div className={`text-xs sm:text-sm font-medium transition-colors duration-300 ${
+                                    isDarkMode ? 'text-blue-400' : 'text-blue-600'
+                                }`}>
+                                    {userData.role.charAt(0).toUpperCase() + userData.role.slice(1)}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

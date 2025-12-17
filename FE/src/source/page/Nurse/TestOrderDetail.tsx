@@ -1,140 +1,75 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { testOrdersAPI } from '../Axios/Axios'
+
+// Interface cho Test Order từ API
+interface TestOrder {
+  _id: string;
+  userid: string;
+  created_by: string;
+  order_code: string;
+  patient_name: string;
+  date_of_birth: string;
+  gender: string;
+  age: number;
+  address: string;
+  phone_number: string;
+  email: string;
+  status: string;
+  priority: string;
+  test_type: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
 
 function TestOrderDetail() {
-  const { orderId } = useParams<{ orderId: string }>()
+  const { orderCode } = useParams<{ orderCode: string }>()
   const navigate = useNavigate()
-  const [order, setOrder] = useState<any>(null)
+  
+  const [testOrder, setTestOrder] = useState<TestOrder | null>(null)
+  const [loading, setLoading] = useState(false) // Changed to false initially
+  const [error, setError] = useState<string | null>(null)
 
-  // Sample test orders data (same as in TestOrdersList)
-  const testOrders = [
-    {
-      id: 'TO-000123',
-      patientName: 'Maria Johnson',
-      testType: 'Blood Test',
-      status: 'Pending',
-      orderDate: '2023-01-15',
-      priority: 'High',
-      doctor: 'Dr. Smith',
-      details: {
-        patientInfo: {
-          patientId: 'P-001234',
-          age: 35,
-          gender: 'Female',
-          phone: '+1 (555) 123-4567',
-          email: 'maria.johnson@email.com',
-          address: '123 Main St, New York, NY 10001',
-          medicalHistory: 'Hypertension, Diabetes Type 2',
-          allergies: 'Penicillin, Shellfish'
-        },
-        testDetails: {
-          testCode: 'CBC-001',
-          testName: 'Complete Blood Count',
-          specimenType: 'Whole Blood',
-          collectionDate: '2023-01-15',
-          collectionTime: '09:30 AM',
-          fastingRequired: true,
-          specialInstructions: 'Patient should fast for 8 hours before test',
-          expectedResults: 'Within 24 hours'
-        },
-        orderInfo: {
-          orderedBy: 'Dr. Smith',
-          department: 'Internal Medicine',
-          diagnosis: 'Routine health check',
-          notes: 'Patient complains of fatigue and weakness'
-        }
-      }
-    },
-    {
-      id: 'TO-000124',
-      patientName: 'John Smith',
-      testType: 'Urine Test',
-      status: 'In Progress',
-      orderDate: '2023-02-10',
-      priority: 'Medium',
-      doctor: 'Dr. Brown',
-      details: {
-        patientInfo: {
-          patientId: 'P-001235',
-          age: 42,
-          gender: 'Male',
-          phone: '+1 (555) 234-5678',
-          email: 'john.smith@email.com',
-          address: '456 Oak Ave, Los Angeles, CA 90210',
-          medicalHistory: 'Kidney stones (2019)',
-          allergies: 'None known'
-        },
-        testDetails: {
-          testCode: 'UA-001',
-          testName: 'Urinalysis',
-          specimenType: 'Urine',
-          collectionDate: '2023-02-10',
-          collectionTime: '08:15 AM',
-          fastingRequired: false,
-          specialInstructions: 'First morning urine preferred',
-          expectedResults: 'Within 4 hours'
-        },
-        orderInfo: {
-          orderedBy: 'Dr. Brown',
-          department: 'Urology',
-          diagnosis: 'Follow-up for kidney function',
-          notes: 'Patient reports frequent urination'
-        }
-      }
-    },
-    {
-      id: 'TO-000125',
-      patientName: 'Sarah Wilson',
-      testType: 'Blood Test',
-      status: 'Completed',
-      orderDate: '2023-02-12',
-      priority: 'Low',
-      doctor: 'Dr. Davis',
-      details: {
-        patientInfo: {
-          patientId: 'P-001236',
-          age: 28,
-          gender: 'Female',
-          phone: '+1 (555) 345-6789',
-          email: 'sarah.wilson@email.com',
-          address: '789 Pine St, Chicago, IL 60601',
-          medicalHistory: 'None',
-          allergies: 'Latex'
-        },
-        testDetails: {
-          testCode: 'LIP-001',
-          testName: 'Lipid Panel',
-          specimenType: 'Serum',
-          collectionDate: '2023-02-12',
-          collectionTime: '10:00 AM',
-          fastingRequired: true,
-          specialInstructions: '12-hour fasting required',
-          expectedResults: 'Within 6 hours'
-        },
-        orderInfo: {
-          orderedBy: 'Dr. Davis',
-          department: 'Cardiology',
-          diagnosis: 'Routine screening',
-          notes: 'Annual health checkup'
-        }
-      }
-    }
-  ]
-
+  // Fetch chi tiết test order
   useEffect(() => {
-    if (orderId) {
-      const foundOrder = testOrders.find(o => o.id === orderId)
-      setOrder(foundOrder || null)
+    const fetchTestOrderDetail = async () => {
+      if (!orderCode) {
+        console.warn('⚠️ No orderCode in URL params')
+        setError('Order code is required. Please provide a valid order code in the URL.')
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+        
+        const response = await testOrdersAPI.getOrderByCode(orderCode)
+        
+        setTestOrder(response.data.data)
+      } catch (err: any) {
+        console.error('❌ Error fetching test order detail:', err)
+        setError(err.response?.data?.message || 'Failed to fetch test order detail')
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [orderId])
+
+    fetchTestOrderDetail()
+  }, [orderCode])
+
+  const handleBack = () => {
+    navigate('/nurse/test-orders')
+  }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Completed':
+    switch (status.toLowerCase()) {
+      case 'completed':
         return 'bg-green-100 text-green-800'
-      case 'In Progress':
+      case 'in progress':
         return 'bg-blue-100 text-blue-800'
-      case 'Pending':
+      case 'pending':
         return 'bg-yellow-100 text-yellow-800'
       default:
         return 'bg-gray-100 text-gray-800'
@@ -142,27 +77,38 @@ function TestOrderDetail() {
   }
 
   const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High':
+    switch (priority.toLowerCase()) {
+      case 'high':
         return 'bg-red-100 text-red-800'
-      case 'Medium':
-        return 'bg-orange-100 text-orange-800'
-      case 'Low':
+      case 'normal':
+        return 'bg-blue-100 text-blue-800'
+      case 'low':
         return 'bg-green-100 text-green-800'
       default:
         return 'bg-gray-100 text-gray-800'
     }
   }
 
-  if (!order) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-5 w-5 md:h-6 md:w-6 border-b-2 border-blue-500"></div>
+          <span className="text-sm md:text-base text-gray-600 dark:text-gray-400">Loading test order detail...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Test Order Not Found</h2>
-          <p className="text-gray-600 mb-6">The requested test order could not be found.</p>
-          <button
-            onClick={() => navigate('/nurse/test-orders')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          <div className="text-red-500 text-base md:text-lg font-semibold mb-4">Error</div>
+          <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+          <button 
+            onClick={handleBack}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm md:text-base"
           >
             Back to Test Orders
           </button>
@@ -171,188 +117,135 @@ function TestOrderDetail() {
     )
   }
 
-  const { details } = order
+  if (!testOrder) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="text-center">
+          <div className="text-gray-500 dark:text-gray-400 text-base md:text-lg font-semibold mb-4">Test Order Not Found</div>
+          <button 
+            onClick={handleBack}
+            className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors text-sm md:text-base"
+          >
+            Back to Test Orders
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex items-center justify-between max-w-6xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => navigate('/nurse/test-orders')}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-4xl mx-auto p-4 md:p-6 lg:p-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 md:gap-4 mb-4 md:mb-6">
+          <div className="flex items-center space-x-2 md:space-x-3">
+            <button 
+              onClick={handleBack}
+              className="p-1.5 md:p-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <div>
-              <h1 className="text-lg font-bold text-gray-900">Test Order Details</h1>
-              <p className="text-xs text-gray-500">Order ID: {order.id}</p>
-            </div>
+            <h1 className="text-lg md:text-2xl font-bold text-gray-800 dark:text-gray-200">Test Order Detail</h1>
           </div>
-          <div className="flex items-center space-x-2">
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
-              {order.status}
+          <div className="flex items-center flex-wrap gap-2">
+            <span className={`px-2 md:px-3 py-1 rounded-full text-xs md:text-sm font-medium ${getStatusColor(testOrder.status)}`}>
+              {testOrder.status}
             </span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(order.priority)}`}>
-              {order.priority}
+            <span className={`px-2 md:px-3 py-1 rounded-full text-xs md:text-sm font-medium ${getPriorityColor(testOrder.priority)}`}>
+              {testOrder.priority}
             </span>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="p-4 space-y-6 max-w-6xl mx-auto">
-        {/* Patient Information */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-            <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            Patient Information
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Test Order Information */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 md:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+            {/* Basic Information */}
             <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Patient ID</label>
-              <p className="text-sm text-gray-900 font-mono">{details.patientInfo.patientId}</p>
+              <h3 className="text-base md:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 md:mb-4">Basic Information</h3>
+              <div className="space-y-2 md:space-y-3">
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Order Code</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 font-mono">{testOrder.order_code}</p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Patient Name</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">{testOrder.patient_name}</p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Test Type</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">{testOrder.test_type}</p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Created By</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">{testOrder.created_by}</p>
+                </div>
+              </div>
             </div>
+
+            {/* Patient Details */}
             <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Full Name</label>
-              <p className="text-sm text-gray-900 font-semibold">{order.patientName}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Age</label>
-              <p className="text-sm text-gray-900">{details.patientInfo.age} years</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Gender</label>
-              <p className="text-sm text-gray-900">{details.patientInfo.gender}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Phone</label>
-              <p className="text-sm text-gray-900">{details.patientInfo.phone}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Email</label>
-              <p className="text-sm text-gray-900">{details.patientInfo.email}</p>
-            </div>
-            <div className="md:col-span-2 lg:col-span-2">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Address</label>
-              <p className="text-sm text-gray-900">{details.patientInfo.address}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Medical History</label>
-              <p className="text-sm text-gray-900">{details.patientInfo.medicalHistory}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Allergies</label>
-              <p className="text-sm text-gray-900">{details.patientInfo.allergies}</p>
+              <h3 className="text-base md:text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 md:mb-4">Patient Details</h3>
+              <div className="space-y-2 md:space-y-3">
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Date of Birth</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">{testOrder.date_of_birth}</p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Gender</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 capitalize">{testOrder.gender}</p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Age</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">{testOrder.age}</p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Phone Number</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">{testOrder.phone_number}</p>
+                </div>
+                <div>
+                  <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Email</label>
+                  <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 break-all">{testOrder.email}</p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Test Details */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-            <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-            </svg>
-            Test Details
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Test Code</label>
-              <p className="text-sm text-gray-900 font-mono bg-blue-50 px-2 py-1 rounded">{details.testDetails.testCode}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Test Name</label>
-              <p className="text-sm text-gray-900 font-semibold">{details.testDetails.testName}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Specimen Type</label>
-              <p className="text-sm text-gray-900">{details.testDetails.specimenType}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Collection Date</label>
-              <p className="text-sm text-gray-900">{details.testDetails.collectionDate}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Collection Time</label>
-              <p className="text-sm text-gray-900">{details.testDetails.collectionTime}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Fasting Required</label>
-              <p className="text-sm">
-                {details.testDetails.fastingRequired ? (
-                  <span className="text-red-600 font-semibold bg-red-50 px-2 py-1 rounded-full text-xs">Yes</span>
-                ) : (
-                  <span className="text-green-600 font-semibold bg-green-50 px-2 py-1 rounded-full text-xs">No</span>
-                )}
+          {/* Address */}
+          <div className="mt-4 md:mt-6">
+            <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Address</label>
+            <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 mt-1">{testOrder.address}</p>
+          </div>
+
+          {/* Notes */}
+          {testOrder.notes && (
+            <div className="mt-4 md:mt-6">
+              <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Notes</label>
+              <p className="text-sm md:text-base text-gray-800 dark:text-gray-200 mt-1 bg-gray-50 dark:bg-gray-700 p-2 md:p-3 rounded-lg">
+                {testOrder.notes}
               </p>
             </div>
-            <div className="md:col-span-2 lg:col-span-2">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Special Instructions</label>
-              <p className="text-sm text-gray-900 bg-yellow-50 border border-yellow-200 rounded-lg p-2">
-                {details.testDetails.specialInstructions}
-              </p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Expected Results</label>
-              <p className="text-sm text-gray-900">{details.testDetails.expectedResults}</p>
+          )}
+
+          {/* Timestamps */}
+          <div className="mt-4 md:mt-6 pt-4 md:pt-6 border-t border-gray-200 dark:border-gray-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+              <div>
+                <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Created At</label>
+                <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">
+                  {new Date(testOrder.created_at).toLocaleString('vi-VN')}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs md:text-sm font-medium text-gray-600 dark:text-gray-400">Updated At</label>
+                <p className="text-sm md:text-base text-gray-800 dark:text-gray-200">
+                  {new Date(testOrder.updated_at).toLocaleString('vi-VN')}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Order Information */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-            <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
-            </svg>
-            Order Information
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Ordered By</label>
-              <p className="text-sm text-gray-900 font-semibold">{details.orderInfo.orderedBy}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Department</label>
-              <p className="text-sm text-gray-900">{details.orderInfo.department}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Order Date</label>
-              <p className="text-sm text-gray-900">{order.orderDate}</p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Diagnosis</label>
-              <p className="text-sm text-gray-900">{details.orderInfo.diagnosis}</p>
-            </div>
-            <div className="md:col-span-2 lg:col-span-4">
-              <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Notes</label>
-              <p className="text-sm text-gray-900 bg-gray-50 border border-gray-200 rounded-lg p-2">
-                {details.orderInfo.notes}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex justify-end space-x-3 pt-4">
-          <button
-            onClick={() => navigate('/nurse/test-orders')}
-            className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
-          >
-            Back to List
-          </button>
-          <button
-            onClick={() => navigate(`/nurse/test-orders/edit/${order.id}`)}
-            className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors font-medium"
-          >
-            Edit Order
-          </button>
         </div>
       </div>
     </div>

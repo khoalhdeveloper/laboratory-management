@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { userAPI } from '../source/page/Axios/Axios';
+import '../source/CSS/Loading.css';
 
 interface AuthGuardProps {
     children: ReactNode;
@@ -8,7 +9,7 @@ interface AuthGuardProps {
     redirectTo?: string;
 }
 
-function AuthGuard({ children, allowedRoles, redirectTo = '/login' }: AuthGuardProps) {
+function AuthGuard({ children, allowedRoles, redirectTo = '/' }: AuthGuardProps) {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -26,19 +27,26 @@ function AuthGuard({ children, allowedRoles, redirectTo = '/login' }: AuthGuardP
                     return;
                 }
 
-                const response = await userAPI.getCurrentUser();
-                const userData = response.data;
-                
-                
-                if (allowedRoles && allowedRoles.length > 0) {
-                    if (!allowedRoles.includes(userData.role)) {
-                        localStorage.removeItem('token');
-                        localStorage.removeItem('userRole');
-                        localStorage.removeItem('userId');
-                        navigate(redirectTo, { replace: true });
-                        return;
-                    }
-                }
+        const response = await userAPI.getCurrentUser();
+        const userData = response.data;
+        
+        // Handle different response structures
+        let actualUserData;
+        if (userData.data) {
+            actualUserData = userData.data;
+        } else {
+            actualUserData = userData;
+        }
+        
+        if (allowedRoles && allowedRoles.length > 0) {
+            if (!allowedRoles.includes(actualUserData.role)) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('userRole');
+                localStorage.removeItem('userId');
+                navigate(redirectTo, { replace: true });
+                return;
+            }
+        }
 
                 setIsAuthenticated(true);
                 
@@ -59,8 +67,12 @@ function AuthGuard({ children, allowedRoles, redirectTo = '/login' }: AuthGuardP
         return (
             <div className="flex h-screen bg-gray-50 items-center justify-center">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Đang kiểm tra quyền truy cập...</p>
+                    <div className="flex items-center justify-center gap-3">
+                        <div className="loader" style={{
+                            borderColor: '#000000'
+                        }}></div>
+                        <p className="text-gray-600">Checking access rights...</p>
+                    </div>
                 </div>
             </div>
         );

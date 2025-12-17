@@ -1,146 +1,175 @@
-.auth-container {
+.auth-container-responsive::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      #2e67bb 0%,
+      #3494c0 50%,
+      #2100a767 100%
+    );
+    background-size: 400% 400%;
+    animation: gradientShift 12s ease infinite;
+    z-index: 0;
+    transition: background 0.8s ease;
+  }
+  /* Làm cho nội dung phía trên nền */
+  .auth-box-responsive {
+    position: relative;
+    z-index: 1;
+  }
+  
+  /* Hiệu ứng gradient di chuyển */
+  @keyframes gradientShift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  .auth-container-responsive {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  /* Bong bóng nền */
+  .bubble {
+    position: absolute;
+    bottom: -150px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 50%;
+    animation: rise 15s infinite ease-in;
+    opacity: 0.6;
+  }
+  
+  @keyframes rise {
+    0% {
+      transform: translateY(0) scale(1);
+      opacity: 0.6;
+    }
+    100% {
+      transform: translateY(-1200px) scale(1.2);
+      opacity: 0;
+    }
+  }
+  
+  /* Random size và delay */
+  .bubble:nth-child(1) { width: 80px; height: 80px; left: 10%; animation-delay: 0s; animation-duration: 16s; }
+  .bubble:nth-child(2) { width: 50px; height: 50px; left: 25%; animation-delay: 2s; animation-duration: 14s; }
+  .bubble:nth-child(3) { width: 100px; height: 100px; left: 40%; animation-delay: 4s; animation-duration: 18s; }
+  .bubble:nth-child(4) { width: 60px; height: 60px; left: 55%; animation-delay: 1s; animation-duration: 15s; }
+  .bubble:nth-child(5) { width: 40px; height: 40px; left: 70%; animation-delay: 3s; animation-duration: 13s; }
+  .bubble:nth-child(6) { width: 90px; height: 90px; left: 85%; animation-delay: 5s; animation-duration: 20s; }
+  .bubble:nth-child(7) { width: 30px; height: 30px; left: 50%; animation-delay: 7s; animation-duration: 12s; }
+  .square {
+    position: absolute;
+    bottom: -100px;
+    background: rgba(255, 255, 255, 0.25);
+    width: 30px;
+    height: 30px;
+    transform: rotate(45deg);
+    animation: floatSquare 18s infinite linear;
+    opacity: 0.4;
+  }
+  
+  @keyframes floatSquare {
+    0% {
+      transform: translateY(0) rotate(0deg) scale(1);
+      opacity: 0.6;
+    }
+    100% {
+      transform: translateY(-1300px) rotate(360deg) scale(1.1);
+      opacity: 0;
+    }
+  }
+  
+  /* Random vị trí & delay hình vuông */
+  .square:nth-child(8)  { left: 15%; animation-delay: 1s; animation-duration: 18s; }
+  .square:nth-child(9)  { left: 35%; animation-delay: 3s; animation-duration: 20s; }
+  .square:nth-child(10) { left: 60%; animation-delay: 5s; animation-duration: 16s; }
+  .square:nth-child(11) { left: 75%; animation-delay: 2s; animation-duration: 22s; }
+  .square:nth-child(12) { left: 90%; animation-delay: 6s; animation-duration: 19s; }
+  
+  /* ===== KHUNG LOGIN ===== */
+  .auth-box-responsive {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(15px);
+    border-radius: 1.5rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
     width: 100%;
-    min-height: 100vh;
-    background: url('/bglogin.jpg') center/cover no-repeat fixed;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: sans-serif;
-}
-
-.auth-box {
-    background-color: #fff;
-    border-radius: 10px;
-    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25),
-        0 10px 10px rgba(0, 0, 0, 0.22);
+    max-width: 1100px;
+    min-height: 750px;
     position: relative;
     overflow: hidden;
-    width: 1100px;
-    /* slightly smaller */
-    max-width: 95%;
-    min-height: 650px;
-    /* slightly smaller */
-    display: flex;
-}
-
-.form-container {
-    position: absolute;
-    top: 0;
-    height: 100%;
-    transition: all 0.6s ease-in-out;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    padding: 0 40px;
-    /* reduce side padding */
-    text-align: center;
-    width: 50%;
-}
-
-.sign-in-container {
-    left: 0;
-    z-index: 2;
-}
-
-.sign-up-container {
-    left: 0;
-    opacity: 0;
     z-index: 1;
-}
-
-.auth-box.right-panel-active .sign-up-container {
-    transform: translateX(100%);
-    opacity: 1;
-    z-index: 5;
-}
-
-.auth-box.right-panel-active .sign-in-container {
-    transform: translateX(100%);
-    opacity: 0;
-    z-index: 1;
-}
-
-.overlay-container {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    width: 50%;
-    height: 100%;
-    overflow: hidden;
-    transition: transform 0.6s ease-in-out;
-    z-index: 100;
-}
-
-.auth-box.right-panel-active .overlay-container {
-    transform: translateX(-100%);
-}
-
-.overlay {
-    background: linear-gradient(135deg, #5ec8ff 0%, #6fd6e9 45%, #b6a0ff 100%);
+  }
+  
+  /* ===== NÚT ===== */
+  button[type="submit"] {
+    background: linear-gradient(to right, #38bdf8, #8b5cf6);
+    border: none;
+    border-radius: 9999px;
     color: white;
-    position: relative;
-    left: -100%;
-    height: 100%;
-    width: 200%;
-    transform: translateX(0);
-    transition: transform 0.6s ease-in-out;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  button[type="submit"]:hover {
+    box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
+    transform: scale(1.05);
+  }
+  
+  
+  .custom-google-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.auth-box.right-panel-active .overlay {
-    transform: translateX(50%);
-}
-
-.overlay-panel {
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 250px;
+    padding: 0.65rem 1.25rem;
+    margin: 1rem auto;
+    background: linear-gradient(to right, #38bdf8, #8b5cf6);
+    color: white;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 9999px;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .custom-google-btn:hover {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+    transform: scale(1.05);
+  }
+  
+  .custom-google-btn:active {
+    transform: scale(0.98);
+  }
+  
+  .custom-google-btn svg {
+    flex-shrink: 0;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+  
+  }
+  
+  
+  .custom-google-btn-hidden {
     position: absolute;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    padding: 0 40px;
-    text-align: center;
-    top: 0;
-    height: 100%;
-    width: 50%;
-    transition: transform 0.6s ease-in-out;
-}
-
-.overlay-left {
-    transform: translateX(-100%);
-}
-
-.auth-box.right-panel-active .overlay-left {
-    transform: translateX(-50%);
-}
-
-.overlay-right {
-    right: 0;
-    transform: translateX(0);
-}
-
-.auth-box.right-panel-active .overlay-right {
-    transform: translateX(20%);
-}
-
-
-
-.social-container {
-    margin: 20px 0;
-}
-
-/* Hide browser default password reveal button */
-input[type="password"]::-ms-reveal,
-input[type="password"]::-ms-clear {
-    display: none;
-}
-
-input[type="password"]::-webkit-credentials-auto-fill-button {
-    display: none !important;
-}
-
-input[type="password"]::-webkit-strong-password-auto-fill-button {
-    display: none !important;
-}
+    left: -9999px;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  .signin-gg-text
+  {
+    color: white;
+  }
+  
+  

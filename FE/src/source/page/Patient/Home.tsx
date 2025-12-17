@@ -1,53 +1,63 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { userAPI } from '../Axios/Axios';
+import { userAPI, testResultsAPI } from '../Axios/Axios';
 import ViewResultsModal from './ViewResults';
+import HistoryTest from './HistoryTest';
+import { exportTestResultsToPDFHTML } from '../../../utils/exportUtils';
+import { toast } from '../../../utils/toast';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
+import '../../../source/CSS/Loading.css';
 
 function Home() {
     const navigate = useNavigate();
+    const { isDarkMode: _isDarkMode } = useGlobalTheme();
     const [activeTab, setActiveTab] = useState('personal-record');
     const [loading, setLoading] = useState(true);
     const [userData, setUserData] = useState<any>(null);
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 5;
-    const [selectedTestReport, setSelectedTestReport] = useState<any>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [testReports, setTestReports] = useState<any[]>([]);
+    const [testReportsLoading, setTestReportsLoading] = useState(false);
+    const [testReportsError, setTestReportsError] = useState<string | null>(null);
+    const [selectedTestReport, setSelectedTestReport] = useState<any>(null);
 
-    // Function to check if user profile is complete
-    const isProfileComplete = (userData: any): boolean => {
-        const requiredFields = [
-            'fullName',
-            'dateOfBirth', 
-            'age',
-            'gender',
-            'address',
-            'phoneNumber',
-            'email',
-            'identifyNumber'
-        ];
-
-        return requiredFields.every(field => {
-            const value = userData[field];
-            return value && value.toString().trim() !== '';
-        });
-    };
-
-    // Check profile completeness on component mount
     useEffect(() => {
         const checkProfile = async () => {
             try {
                 setLoading(true);
-                const response = await userAPI.getCurrentUser();
-                const userData = response.data;
+                   const response = await userAPI.getCurrentUser();
+                   const userData = response.data;
+                   
+                   let actualUserData;
+                   if (userData.data) {
+                       actualUserData = userData.data;
+                   } else {
+                       actualUserData = userData;
+                   }
                 
-                // Store user data for display
-                setUserData(userData);
+                setUserData(actualUserData);
                 
-                if (!isProfileComplete(userData)) {
-                    navigate('/patient/incomplete-profile', { replace: true });
-                }
+                const requiredFields = [
+                    'fullName',
+                    'dateOfBirth', 
+                    'age',
+                    'gender',
+                    'address',
+                    'phoneNumber',
+                    'email',
+                    'identifyNumber'
+                ];
+                
+                   const fieldStatus = requiredFields.map(field => {
+                       const value = actualUserData[field];
+                       return value && value.toString().trim() !== '';
+                   });
+                   
+                   const isComplete = fieldStatus.every(status => status);
+                   
+                   if (!isComplete) {
+                       navigate('/patient/incomplete-profile', { replace: true });
+                   }
             } catch (error) {
-                // If can't check profile, redirect to incomplete profile page to be safe
                 navigate('/patient/incomplete-profile', { replace: true });
             } finally {
                 setLoading(false);
@@ -57,269 +67,299 @@ function Home() {
         checkProfile();
     }, [navigate]);
 
-
-
-    // Mock data for test reports
-    const testReports = [
-        {
-            id: 'TR-000123',
-            orderId: 'ORD-003456',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Complete Blood Count (CBC)',
-            department: 'Hematology',
-            status: 'Completed',
-            resultDate: '2024-01-15',
-            priority: 'High',
-            doctor: 'Dr. Smith',
-            completionTime: '14:30',
-            results: {
-                wbc: { value: '5.2', unit: '10³/µL', normal: '4.0-11.0', status: 'Normal' },
-                rbc: { value: '5.5', unit: '10⁶/µL', normal: '4.5-5.9', status: 'Normal' },
-                hemoglobin: { value: '13.7', unit: 'g/dL', normal: '13.5-17.5', status: 'Normal' },
-                hematocrit: { value: '40.2', unit: '%', normal: '41.0-50.0', status: 'Normal' },
-                platelet: { value: '150', unit: '10³/µL', normal: '150-450', status: 'Normal' },
-                mcv: { value: '86', unit: 'fL', normal: '80-100', status: 'Normal' },
-                mch: { value: '29', unit: 'pg', normal: '27-33', status: 'Normal' },
-                mchc: { value: '33.5', unit: 'g/dL', normal: '32-36', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000124',
-            orderId: 'ORD-003457',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Lipid Panel',
-            department: 'Cardiology',
-            status: 'Completed',
-            resultDate: '2024-01-20',
-            priority: 'Medium',
-            doctor: 'Dr. Johnson',
-            completionTime: '10:15',
-            results: {
-                totalCholesterol: { value: '185', unit: 'mg/dL', normal: '<200', status: 'Normal' },
-                ldlCholesterol: { value: '110', unit: 'mg/dL', normal: '<100', status: 'Borderline' },
-                hdlCholesterol: { value: '55', unit: 'mg/dL', normal: '>50', status: 'Normal' },
-                triglycerides: { value: '120', unit: 'mg/dL', normal: '<150', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000125',
-            orderId: 'ORD-003458',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Thyroid Function Test',
-            department: 'Endocrinology',
-            status: 'Completed',
-            resultDate: '2024-01-25',
-            priority: 'Low',
-            doctor: 'Dr. Wilson',
-            completionTime: '16:45',
-            results: {
-                tsh: { value: '2.1', unit: 'mIU/L', normal: '0.4-4.0', status: 'Normal' },
-                t4: { value: '8.2', unit: 'µg/dL', normal: '4.5-12.0', status: 'Normal' },
-                t3: { value: '120', unit: 'ng/dL', normal: '80-200', status: 'Normal' },
-                freeT4: { value: '1.2', unit: 'ng/dL', normal: '0.8-1.8', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000126',
-            orderId: 'ORD-003459',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Liver Function Test',
-            department: 'Gastroenterology',
-            status: 'Completed',
-            resultDate: '2024-02-01',
-            priority: 'Medium',
-            doctor: 'Dr. Brown',
-            completionTime: '09:30',
-            results: {
-                alt: { value: '25', unit: 'U/L', normal: '7-56', status: 'Normal' },
-                ast: { value: '30', unit: 'U/L', normal: '10-40', status: 'Normal' },
-                bilirubin: { value: '0.8', unit: 'mg/dL', normal: '0.1-1.2', status: 'Normal' },
-                alkalinePhosphatase: { value: '85', unit: 'U/L', normal: '44-147', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000127',
-            orderId: 'ORD-003460',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Kidney Function Test',
-            department: 'Nephrology',
-            status: 'Completed',
-            resultDate: '2024-02-05',
-            priority: 'High',
-            doctor: 'Dr. Davis',
-            completionTime: '11:20',
-            results: {
-                creatinine: { value: '1.1', unit: 'mg/dL', normal: '0.6-1.2', status: 'Normal' },
-                bun: { value: '15', unit: 'mg/dL', normal: '6-24', status: 'Normal' },
-                egfr: { value: '85', unit: 'mL/min/1.73m²', normal: '>60', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000128',
-            orderId: 'ORD-003461',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Diabetes Panel',
-            department: 'Endocrinology',
-            status: 'Completed',
-            resultDate: '2024-02-10',
-            priority: 'Medium',
-            doctor: 'Dr. Wilson',
-            completionTime: '13:15',
-            results: {
-                fastingGlucose: { value: '95', unit: 'mg/dL', normal: '<100', status: 'Normal' },
-                hba1c: { value: '5.6', unit: '%', normal: '<5.7', status: 'Normal' },
-                insulin: { value: '8.5', unit: 'µU/mL', normal: '2.6-24.9', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000129',
-            orderId: 'ORD-003462',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Vitamin D Test',
-            department: 'Internal Medicine',
-            status: 'Completed',
-            resultDate: '2024-02-15',
-            priority: 'Low',
-            doctor: 'Dr. Smith',
-            completionTime: '15:00',
-            results: {
-                vitaminD: { value: '32', unit: 'ng/mL', normal: '30-100', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000130',
-            orderId: 'ORD-003463',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Iron Studies',
-            department: 'Hematology',
-            status: 'Completed',
-            resultDate: '2024-02-20',
-            priority: 'Medium',
-            doctor: 'Dr. Johnson',
-            completionTime: '12:45',
-            results: {
-                ferritin: { value: '45', unit: 'ng/mL', normal: '15-150', status: 'Normal' },
-                iron: { value: '85', unit: 'µg/dL', normal: '60-170', status: 'Normal' },
-                tibc: { value: '320', unit: 'µg/dL', normal: '240-450', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000131',
-            orderId: 'ORD-003464',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'PSA Test',
-            department: 'Urology',
-            status: 'Completed',
-            resultDate: '2024-02-25',
-            priority: 'Low',
-            doctor: 'Dr. Brown',
-            completionTime: '14:30',
-            results: {
-                psa: { value: '2.1', unit: 'ng/mL', normal: '<4.0', status: 'Normal' },
-                freePsa: { value: '0.8', unit: 'ng/mL', normal: '>0.25', status: 'Normal' }
-            }
-        },
-        {
-            id: 'TR-000132',
-            orderId: 'ORD-003465',
-            patientId: 'PT-923401',
-            patientName: 'Trần Quốc Lâm',
-            dateOfBirth: '15-05-2004',
-            gender: 'Male',
-            phoneNumber: '0123456789',
-            testType: 'Urine Analysis',
-            department: 'Nephrology',
-            status: 'Completed',
-            resultDate: '2024-03-01',
-            priority: 'Medium',
-            doctor: 'Dr. Davis',
-            completionTime: '10:00',
-            results: {
-                protein: { value: 'Negative', unit: '', normal: 'Negative', status: 'Normal' },
-                glucose: { value: 'Negative', unit: '', normal: 'Negative', status: 'Normal' },
-                blood: { value: 'Negative', unit: '', normal: 'Negative', status: 'Normal' }
+    // Function to format API results into display format (similar to Nurse ViewResults)
+    const formatApiResults = (resultsData: any, testType: string) => {
+        if (!resultsData) return null;
+        
+        // Helper function to determine status based on value and normal range
+        const getStatus = (value: number, min: number, max: number) => {
+            if (value < min || value > max) return 'Abnormal';
+            return 'Normal';
+        };
+        
+        // Helper function to check if value is numeric (not Negative/Positive text)
+        const isNumeric = (val: any) => {
+            if (val === null || val === undefined || val === 'N/A' || val === '') return false;
+            const strVal = String(val).trim().toLowerCase();
+            if (strVal === 'negative' || strVal === 'positive') return false;
+            const numVal = parseFloat(strVal);
+            return !isNaN(numVal) && isFinite(numVal);
+        };
+        
+        // Check if this is URINALYSIS
+        if (testType === 'Urinalysis') {
+            return {
+                leukocytes: {
+                    value: resultsData.leu_value || 'N/A',
+                    unit: isNumeric(resultsData.leu_value) ? 'Leu/UL' : '',
+                    normal: 'Negative',
+                    status: (resultsData.leu_value === 'Negative' || String(resultsData.leu_value).toLowerCase() === 'negative') ? 'Normal' : 'Abnormal'
+                },
+                nitrite: {
+                    value: resultsData.nit_value || 'N/A',
+                    unit: '',
+                    normal: 'Negative',
+                    status: (resultsData.nit_value === 'Negative' || String(resultsData.nit_value).toLowerCase() === 'negative') ? 'Normal' : 'Abnormal'
+                },
+                protein: {
+                    value: resultsData.pro_value?.toString() || 'N/A',
+                    unit: isNumeric(resultsData.pro_value) ? 'mg/dL' : '',
+                    normal: 'Negative',
+                    status: (resultsData.pro_value === 'Negative' || String(resultsData.pro_value).toLowerCase() === 'negative' || resultsData.pro_value === 0 || resultsData.pro_value === '0') ? 'Normal' : 'Abnormal'
+                },
+                pH: {
+                    value: resultsData.ph_value?.toString() || 'N/A',
+                    unit: '',
+                    normal: '5.0-8.0',
+                    status: (resultsData.ph_value >= 5.0 && resultsData.ph_value <= 8.0) ? 'Normal' : 'Abnormal'
+                },
+                blood: {
+                    value: resultsData.bld_value || 'N/A',
+                    unit: isNumeric(resultsData.bld_value) ? 'mg/dL' : '',
+                    normal: 'Negative',
+                    status: (resultsData.bld_value === 'Negative' || String(resultsData.bld_value).toLowerCase() === 'negative') ? 'Normal' : 'Abnormal'
+                },
+                specificGravity: {
+                    value: resultsData.sg_value?.toString() || 'N/A',
+                    unit: '',
+                    normal: '1.005-1.030',
+                    status: (resultsData.sg_value >= 1.005 && resultsData.sg_value <= 1.030) ? 'Normal' : 'Abnormal'
+                },
+                ketone: {
+                    value: resultsData.ket_value || 'N/A',
+                    unit: isNumeric(resultsData.ket_value) ? 'mg/dL' : '',
+                    normal: 'Negative',
+                    status: (resultsData.ket_value === 'Negative' || String(resultsData.ket_value).toLowerCase() === 'negative') ? 'Normal' : 'Abnormal'
+                },
+                glucose: {
+                    value: resultsData.glu_value || 'N/A',
+                    unit: isNumeric(resultsData.glu_value) ? 'mg/dL' : '',
+                    normal: 'Negative',
+                    status: (resultsData.glu_value === 'Negative' || String(resultsData.glu_value).toLowerCase() === 'negative') ? 'Normal' : 'Abnormal'
+                }
+            };
+        }
+        
+        // Check if this is FECAL ANALYSIS
+        if (testType === 'Fecal Analysis') {
+            try {
+                const details = JSON.parse(resultsData.result_details || '{}');
+                if (details.results) {
+                    const formatted: any = {};
+                    Object.entries(details.results).forEach(([key, value]: [string, any]) => {
+                        formatted[key] = {
+                            value: value.value,
+                            unit: value.unit || '',
+                            normal: value.normalRange,
+                            status: value.status === 'normal' ? 'Normal' : 'Abnormal'
+                        };
+                    });
+                    return formatted;
+                }
+            } catch (err) {
+                // Silent error - fallback to blood test format
             }
         }
-    ];
+        
+        // Default: Blood Test parameters
+        return {
+            wbc: { 
+                value: resultsData.wbc_value?.toString() || 'N/A', 
+                unit: '10³/µL', 
+                normal: '4.0-11.0', 
+                status: resultsData.wbc_value ? getStatus(resultsData.wbc_value, 4, 11) : 'Normal'
+            },
+            rbc: { 
+                value: resultsData.rbc_value?.toString() || 'N/A', 
+                unit: '10⁶/µL', 
+                normal: '4.5-5.9', 
+                status: resultsData.rbc_value ? getStatus(resultsData.rbc_value, 4.5, 5.9) : 'Normal'
+            },
+            hemoglobin: { 
+                value: resultsData.hgb_value?.toString() || 'N/A', 
+                unit: 'g/dL', 
+                normal: '13.5-17.5', 
+                status: resultsData.hgb_value ? getStatus(resultsData.hgb_value, 13.5, 17.5) : 'Normal'
+            },
+            hematocrit: { 
+                value: resultsData.hct_value?.toString() || 'N/A', 
+                unit: '%', 
+                normal: '41.0-50.0', 
+                status: resultsData.hct_value ? getStatus(resultsData.hct_value, 41, 50) : 'Normal'
+            },
+            platelet: { 
+                value: resultsData.plt_value?.toString() || 'N/A', 
+                unit: '10³/µL', 
+                normal: '150-450', 
+                status: resultsData.plt_value ? getStatus(resultsData.plt_value, 150, 450) : 'Normal'
+            },
+            mcv: { 
+                value: resultsData.mcv_value?.toString() || 'N/A', 
+                unit: 'fL', 
+                normal: '80-100', 
+                status: resultsData.mcv_value ? getStatus(resultsData.mcv_value, 80, 100) : 'Normal'
+            },
+            mch: { 
+                value: resultsData.mch_value?.toString() || 'N/A', 
+                unit: 'pg', 
+                normal: '27-33', 
+                status: resultsData.mch_value ? getStatus(resultsData.mch_value, 27, 33) : 'Normal'
+            },
+            mchc: { 
+                value: resultsData.mchc_value?.toString() || 'N/A', 
+                unit: 'g/dL', 
+                normal: '32-36', 
+                status: resultsData.mchc_value ? getStatus(resultsData.mchc_value, 32, 36) : 'Normal'
+            }
+        };
+    };
 
-    // Function to get status color
+    // Load test results from API
+    useEffect(() => {
+        const loadTestResults = async () => {
+            try {
+                setTestReportsLoading(true);
+                setTestReportsError(null);
+                
+                const response = await testResultsAPI.getMyTestResults();
+                
+                if (response.data && response.data.data) {
+                    const apiData = response.data.data;
+                    
+                    const formattedReports = apiData.map((item: any) => {
+                        const testOrder = item.testOrder || {};
+                        const testResult = item.testResult || {};
+                        const testType = testOrder.test_type || 'N/A';
+                        
+                        // Use formatApiResults to format results based on test type
+                        const formattedResults = formatApiResults(testResult, testType);
+                        
+                        return {
+                            id: testResult._id || testOrder._id || 'N/A',
+                            orderId: testOrder.order_code || 'N/A',
+                            patientId: testOrder.userid || 'N/A',
+                            patientName: testOrder.patient_name || 'N/A',
+                            dateOfBirth: testOrder.date_of_birth || 'N/A',
+                            gender: testOrder.gender || 'N/A',
+                            phoneNumber: testOrder.phone_number || userData?.phoneNumber || 'N/A',
+                            testType: testType,
+                            department: 'Laboratory',
+                            status: testResult.status || testOrder.status || 'Completed',
+                            resultDate: (testResult.createdAt || testResult.created_at || testResult.date) ? (() => {
+                                const date = new Date(testResult.createdAt || testResult.created_at || testResult.date);
+                                const day = String(date.getDate()).padStart(2, '0');
+                                const month = String(date.getMonth() + 1).padStart(2, '0');
+                                const year = date.getFullYear();
+                                return `${day}-${month}-${year}`;
+                            })() : 'N/A',
+                            priority: 'Medium',
+                            doctor: testResult.doctor_name || 'N/A',
+                            completionTime: testResult.createdAt ? new Date(testResult.createdAt).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : 'N/A',
+                            results: formattedResults || {},
+                            resultSummary: testResult.result_summary || 'N/A',
+                            resultDetails: testResult.result_details || 'N/A',
+                            instrumentId: testResult.instrument_id || 'N/A',
+                            instrumentName: testResult.instrument_name || 'N/A',
+                            originalCreatedAt: testResult.createdAt,
+                            aiDescription: testResult.ai_description || 'N/A',
+                            doctorComments: testResult.comments || []
+                        };
+                    });
+                    
+                    // Sort by creation date to get the latest first
+                    const sortedReports = formattedReports.sort((a: any, b: any) => {
+                        // Use original createdAt from API for accurate sorting
+                        const dateA = new Date(a.originalCreatedAt || a.resultDate);
+                        const dateB = new Date(b.originalCreatedAt || b.resultDate);
+                        return dateB.getTime() - dateA.getTime(); // Latest first
+                    });
+                    
+                    setTestReports(sortedReports);
+                } else {
+                    setTestReports([]);
+                }
+            } catch (error: any) {
+                setTestReportsError(error.response?.data?.message || error.message || 'Failed to load test results');
+                setTestReports([]);
+            } finally {
+                setTestReportsLoading(false);
+            }
+        };
+
+        if (userData) {
+            loadTestResults();
+        }
+    }, [userData]);
+
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'Normal':
-                return 'bg-green-100 text-green-800'
+                return 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
             case 'Abnormal':
-                return 'bg-red-100 text-red-800'
+                return 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
             case 'Borderline':
-                return 'bg-yellow-100 text-yellow-800'
+                return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
             case 'Completed':
-                return 'bg-green-100 text-green-800'
+                return 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+            case 'No Data':
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
             default:
-                return 'bg-gray-100 text-gray-800'
+                return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
         }
     };
 
-    const getPriorityColor = (priority: string) => {
-        switch (priority) {
-            case 'High':
-                return 'bg-red-100 text-red-800'
-            case 'Medium':
-                return 'bg-orange-100 text-orange-800'
-            case 'Low':
-                return 'bg-green-100 text-green-800'
-            default:
-                return 'bg-gray-100 text-gray-800'
+    const handleViewResult = async (report: any) => {
+        try {
+            setTestReportsError(null);
+            
+            // Load detailed test result data
+            const response = await testResultsAPI.getTestResults(report.orderId);
+            
+            if (response.data && response.data.data) {
+                const apiData = response.data.data;
+                const testOrder = apiData.testOrder || {};
+                const testResult = apiData.testResult || {};
+                const testType = testOrder.test_type || 'N/A';
+                
+                // Use formatApiResults to format results based on test type
+                const formattedResults = formatApiResults(testResult, testType);
+                
+                const detailedReport = {
+                    id: testResult._id || testOrder._id || 'N/A',
+                    orderId: testOrder.order_code || 'N/A',
+                    patientId: testOrder.userid || 'N/A',
+                    patientName: testOrder.patient_name || 'N/A',
+                    dateOfBirth: testOrder.date_of_birth || 'N/A',
+                    gender: testOrder.gender || 'N/A',
+                    phoneNumber: testOrder.phone_number || testOrder.phoneNumber || testOrder.phone || userData?.phoneNumber || 'N/A',
+                    testType: testType,
+                    department: 'Laboratory',
+                    status: testResult.status || testOrder.status || 'Completed',
+                    resultDate: (testResult.createdAt || testResult.created_at || testResult.date) ? (() => {
+                        const date = new Date(testResult.createdAt || testResult.created_at || testResult.date);
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const month = String(date.getMonth() + 1).padStart(2, '0');
+                        const year = date.getFullYear();
+                        return `${day}-${month}-${year}`;
+                    })() : 'N/A',
+                    priority: 'Medium',
+                    doctor: testResult.doctor_name || 'N/A',
+                    completionTime: testResult.createdAt ? new Date(testResult.createdAt).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : 'N/A',
+                    results: formattedResults || {},
+                    instrumentName: testResult.instrument_name || 'N/A',
+                    aiDescription: testResult.ai_description || 'N/A',
+                    doctorComments: testResult.comments || []
+                };
+                
+                setSelectedTestReport(detailedReport);
+                setIsModalOpen(true);
+            } else {
+                setTestReportsError('No test result found for this order code');
+            }
+        } catch (error: any) {
+            setTestReportsError(error.response?.data?.message || error.message || 'Failed to load test result');
         }
-    };
-
-    // Pagination logic
-    const totalPages = Math.ceil(testReports.length / itemsPerPage);
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const currentTestReports = testReports.slice(startIndex, endIndex);
-
-    const handlePageChange = (page: number) => {
-        setCurrentPage(page);
-    };
-
-    const handleViewResult = (report: any) => {
-        setSelectedTestReport(report);
-        setIsModalOpen(true);
     };
 
     const handleCloseModal = () => {
@@ -327,12 +367,28 @@ function Home() {
         setSelectedTestReport(null);
     };
 
-    // Format date of birth for display (DD-MM-YYYY)
+    const handleExportPersonalRecord = async () => {
+        try {
+            if (!userData || !testReports[0]) {
+                toast.error('No data available to export');
+                return;
+            }
+
+            const result = await exportTestResultsToPDFHTML(testReports[0], userData);
+            if (result.success) {
+                toast.success('Personal record exported to PDF successfully!');
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error) {
+            toast.error('Failed to export personal record');
+        }
+    };
+
     const formatDateOfBirthForDisplay = (dateString: string) => {
         if (!dateString) return '';
         
         try {
-            // Handle ISO 8601 format (e.g., "2004-05-15T00:00:00.000Z")
             if (dateString.includes('T') && dateString.includes('Z')) {
                 const date = new Date(dateString);
                 if (!isNaN(date.getTime())) {
@@ -342,7 +398,6 @@ function Home() {
                     return `${day}-${month}-${year}`;
                 }
             }
-            // Handle YYYY-MM-DD format
             else if (dateString.includes('-') && !dateString.includes('T')) {
                 const dateParts = dateString.split('-');
                 if (dateParts.length === 3) {
@@ -350,7 +405,6 @@ function Home() {
                     return `${day}-${month}-${year}`;
                 }
             }
-            // Handle MM/DD/YYYY format (legacy)
             else if (dateString.includes('/')) {
                 const dateParts = dateString.split('/');
                 if (dateParts.length === 3) {
@@ -361,26 +415,26 @@ function Home() {
         } catch (error) {
         }
         
-        return dateString; // Return original if can't parse
+        return dateString;
     };
 
-    // Show loading state while checking profile
     if (loading) {
         return (
-            <div className="flex-1 p-6 bg-gradient-to-br from-sky-100 to-violet-100 flex justify-center items-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                <span className="ml-3 text-gray-600">Đang kiểm tra thông tin...</span>
+            <div className="flex-1 p-6 bg-gradient-to-br from-sky-100 to-violet-100 flex flex-col justify-center items-center">
+                <div className="loader" style={{
+                    borderColor: '#000000'
+                }}></div>
+                <span className="mt-4 text-gray-600">Checking information...</span>
             </div>
         );
     }
 
     return (
-        <div className="flex-1 p-6 bg-gradient-to-br from-sky-100 to-violet-100">
+        <div className="flex-1 p-3 lg:p-6 bg-gradient-to-br from-sky-100 to-violet-100 dark:from-gray-800 dark:to-gray-900 min-h-screen">
 
-            {/* Navigation Tabs */}
-            <div className="bg-white rounded-lg shadow-lg border border-sky-200 mb-6">
-                <div className="border-b border-gray-200">
-                    <nav className="flex space-x-8 px-6">
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-gray-700 dark:to-gray-800 rounded-lg shadow-lg border border-sky-200 dark:border-gray-600 mb-6">
+                <div className="border-b border-gray-200 dark:border-gray-700">
+                    <nav className="flex space-x-4 lg:space-x-8 px-3 lg:px-6 overflow-x-auto">
                         {[
                             { id: 'personal-record', label: 'Personal Record' },
                             { id: 'test-history', label: 'Test History' }
@@ -388,30 +442,63 @@ function Home() {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === tab.id
-                                    ? 'border-blue-500 text-blue-600'
-                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                className={`py-3 lg:py-4 px-2 lg:px-1 border-b-2 font-medium text-xs lg:text-sm whitespace-nowrap ${activeTab === tab.id
+                                    ? 'border-transparent bg-gradient-to-r from-sky-300 to-violet-400 bg-clip-text text-transparent'
+                                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                                     }`}
                             >
-                                {tab.label}
+                                {tab.label.split(' ').map((word, index) => (
+                                    <span key={index} className={activeTab === tab.id ? 'text-transparent bg-gradient-to-r from-sky-300 to-violet-400 bg-clip-text' : ''}>
+                                        {word}
+                                        {index < tab.label.split(' ').length - 1 && '\u00A0'}
+                                    </span>
+                                ))}
                             </button>
                         ))}
                     </nav>
                 </div>
 
-                {/* Tab Content */}
-                <div className="p-6">
+                <div className="p-3 lg:p-6">
                     {activeTab === 'personal-record' && (
                         <div>
-                            {/* Patient Information and Test Information */}
-                            {userData && testReports.slice(0, 1).map((report, index) => (
-                                <div key={index} className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-b border-gray-200">
-                                        {/* Patient Information */}
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
-                                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-600">
+                            
+                            {testReportsLoading && (
+                                <div className="flex justify-center items-center py-8">
+                                    <div className="loader" style={{ borderColor: '#000000' }}></div>
+                                    <span className="ml-4 text-gray-600">Loading test results...</span>
+                                </div>
+                            )}
+                            
+                            {testReportsError && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                                    <div className="flex items-center">
+                                        <svg className="w-5 h-5 text-red-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="text-red-800">{testReportsError}</span>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {!testReportsLoading && !testReportsError && testReports.length === 0 && (
+                                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+                                    <svg className="w-12 h-12 text-yellow-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 19.5c-.77.833.192 2.5 1.732 2.5z" />
+                                    </svg>
+                                    <h3 className="text-lg font-medium text-yellow-800 mb-2">No Test Results Found</h3>
+                                    <p className="text-yellow-700">You don't have any test results available yet. Please contact your healthcare provider.</p>
+                                </div>
+                            )}
+                            
+
+                            {/* Show test results if available - Display the first (newest) report */}
+                            {!testReportsLoading && !testReportsError && testReports.length > 0 && testReports.slice(0, 1).map((report, index) => (
+                                <div key={index} className="bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-b border-gray-200 dark:border-gray-600">
+                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200 shadow-lg">
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-black mb-3 flex items-center">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl flex items-center justify-center mr-4 shadow-md">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white">
                                                         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                                             </svg>
                                         </div>
@@ -419,29 +506,28 @@ function Home() {
                                             </h3>
                                             <div className="space-y-2">
                                                 <div className="flex justify-between">
-                                                    <span className="text-gray-600">Name:</span>
-                                                    <span className="font-medium text-gray-900">{userData.fullName || ''}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Name:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{report.patientName || userData?.fullName || 'N/A'}</span>
                                     </div>
                                         <div className="flex justify-between">
-                                                    <span className="text-gray-600">Date of Birth:</span>
-                                                    <span className="font-medium text-gray-900">{formatDateOfBirthForDisplay(userData.dateOfBirth || '')}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Date of Birth:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{formatDateOfBirthForDisplay(report.dateOfBirth || userData?.dateOfBirth || '')}</span>
                                         </div>
                                         <div className="flex justify-between">
-                                                    <span className="text-gray-600">Gender:</span>
-                                                    <span className="font-medium text-gray-900">{userData.gender || ''}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Gender:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{report.gender || userData?.gender || 'N/A'}</span>
                                         </div>
                                         <div className="flex justify-between">
-                                                    <span className="text-gray-600">Phone Number:</span>
-                                                    <span className="font-medium text-gray-900">{userData.phoneNumber || ''}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Phone Number:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{report.phoneNumber || userData?.phoneNumber || 'N/A'}</span>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        {/* Test Information */}
-                                        <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-4 border border-purple-100">
-                                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-purple-600">
+                                        <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl p-6 border-2 border-purple-200 shadow-lg">
+                                            <h3 className="text-lg font-semibold text-gray-900 dark:text-black mb-3 flex items-center">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-violet-500 rounded-xl flex items-center justify-center mr-4 shadow-md">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white">
                                                         <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
                                                     </svg>
                                                 </div>
@@ -449,43 +535,44 @@ function Home() {
                                             </h3>
                                             <div className="space-y-2">
                                                 <div className="flex justify-between">
-                                                    <span className="text-gray-600">Test Type:</span>
-                                                    <span className="font-medium text-gray-900">{report.testType}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Test Type:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{report.testType}</span>
                                         </div>
                                         <div className="flex justify-between">
-                                                    <span className="text-gray-600">Department:</span>
-                                                    <span className="font-medium text-gray-900">{report.department}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Result Date:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{report.resultDate}</span>
                                         </div>
                                         <div className="flex justify-between">
-                                                    <span className="text-gray-600">Result Date:</span>
-                                                    <span className="font-medium text-gray-900">{report.resultDate}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Instrument:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{report.instrumentName || 'N/A'}</span>
                                         </div>
                                         <div className="flex justify-between">
-                                                    <span className="text-gray-600">Doctor:</span>
-                                                    <span className="font-medium text-gray-900">{report.doctor}</span>
+                                                    <span className="text-sm lg:text-base text-gray-600 dark:text-black">Doctor:</span>
+                                                    <span className="font-medium text-sm lg:text-base text-gray-900 dark:text-black">{report.doctor}</span>
                                                 </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                    {/* Results Table */}
                                     <div className="p-6">
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Test Results</h3>
+                                        <h3 className="text-lg font-semibold text-black dark:text-white mb-4">Test Results</h3>
                                         <div className="overflow-x-auto">
-                                            <table className="w-full">
-                                                <thead className="bg-gray-50">
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full min-w-[600px]">
+                                                <thead className="bg-gray-200 dark:bg-gray-600">
                                                     <tr>
-                                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Parameter</th>
-                                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Value</th>
-                                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Reference Range</th>
-                                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Unit</th>
-                                                        <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">Status</th>
+                                                        <th className="px-2 py-2 lg:px-4 lg:py-3 text-left text-sm lg:text-base font-semibold text-gray-900 dark:text-white">Parameter</th>
+                                                        <th className="px-2 py-2 lg:px-4 lg:py-3 text-left text-sm lg:text-base font-semibold text-gray-900 dark:text-white">Value</th>
+                                                        <th className="px-2 py-2 lg:px-4 lg:py-3 text-left text-sm lg:text-base font-semibold text-gray-900 dark:text-white">Reference Range</th>
+                                                        <th className="px-2 py-2 lg:px-4 lg:py-3 text-left text-sm lg:text-base font-semibold text-gray-900 dark:text-white">Unit</th>
+                                                        <th className="px-2 py-2 lg:px-4 lg:py-3 text-left text-sm lg:text-base font-semibold text-gray-900 dark:text-white">Status</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200">
-                                                    {Object.entries(report.results).map(([key, result], resultIndex) => (
-                                                        <tr key={key} className={resultIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                            <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                                    {Object.entries(report.results).map(([key, result]: [string, any]) => (
+                                                        <tr key={key} className="bg-gray-100 dark:bg-gray-700">
+                                                            <td className="px-2 py-2 lg:px-4 lg:py-3 text-sm lg:text-base text-gray-900 dark:text-white font-medium">
+                                                                {/* Blood Test Parameters */}
                                                                 {key === 'wbc' && 'White Blood Cell (WBC)'}
                                                                 {key === 'rbc' && 'Red Blood Cell (RBC)'}
                                                                 {key === 'hemoglobin' && 'Hemoglobin (HGB)'}
@@ -494,11 +581,37 @@ function Home() {
                                                                 {key === 'mcv' && 'Mean Corpuscular Volume (MCV)'}
                                                                 {key === 'mch' && 'Mean Corpuscular Hemoglobin (MCH)'}
                                                                 {key === 'mchc' && 'Mean Corpuscular Hemoglobin Concentration (MCHC)'}
+                                                                
+                                                                {/* Urine Test Parameters (Urinalysis) */}
+                                                                {key === 'leukocytes' && 'Leukocytes (LEU)'}
+                                                                {key === 'nitrite' && 'Nitrite (NIT)'}
+                                                                {key === 'protein' && 'Protein (PRO)'}
+                                                                {key === 'pH' && 'pH'}
+                                                                {key === 'blood' && 'Blood (BLD)'}
+                                                                {key === 'specificGravity' && 'Specific Gravity (SG)'}
+                                                                {key === 'ketone' && 'Ketone (KET)'}
+                                                                {key === 'glucose' && 'Glucose (GLU)'}
+                                                                
+                                                                {/* Fecal Analysis Parameters */}
+                                                                {key === 'ph_value' && 'pH Value'}
+                                                                {key === 'fobt_value' && 'Fecal Occult Blood (FOBT)'}
+                                                                {key === 'wbcs_value' && 'White Blood Cells (WBCs)'}
+                                                                {key === 'fecal_fat' && 'Fecal Fat'}
+                                                                {key === 'O_and_P' && 'Ova and Parasites (O and P)'}
+                                                                {key === 'rs_value' && 'Reducing Substances (RS)'}
+                                                                {key === 'fc_value' && 'Fecal Calprotectin (FC)'}
+                                                                {key === 'color' && 'Color / Consistency'}
+                                                                
+                                                                {/* Fallback: format camelCase to Title Case */}
+                                                                {!['wbc', 'rbc', 'hemoglobin', 'hematocrit', 'platelet', 'mcv', 'mch', 'mchc',
+                                                                    'leukocytes', 'nitrite', 'protein', 'pH', 'blood', 'specificGravity', 'ketone', 'glucose',
+                                                                    'ph_value', 'fobt_value', 'wbcs_value', 'fecal_fat', 'O_and_P', 'rs_value', 'fc_value', 'color'].includes(key) &&
+                                                                    key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                                                             </td>
-                                                            <td className="px-4 py-3 text-sm font-bold text-gray-900">{result.value}</td>
-                                                            <td className="px-4 py-3 text-sm text-gray-600">{result.normal}</td>
-                                                            <td className="px-4 py-3 text-sm text-gray-600">{result.unit}</td>
-                                                            <td className="px-4 py-3 text-sm">
+                                                            <td className="px-2 py-2 lg:px-4 lg:py-3 text-sm lg:text-base font-bold text-gray-900 dark:text-white">{result.value}</td>
+                                                            <td className="px-2 py-2 lg:px-4 lg:py-3 text-sm lg:text-base text-gray-600 dark:text-white">{result.normal}</td>
+                                                            <td className="px-2 py-2 lg:px-4 lg:py-3 text-sm lg:text-base text-gray-600 dark:text-white">{result.unit}</td>
+                                                            <td className="px-2 py-2 lg:px-4 lg:py-3 text-sm lg:text-base">
                                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(result.status)}`}>
                                                                     {result.status}
                                                                 </span>
@@ -506,74 +619,62 @@ function Home() {
                                                         </tr>
                                                     ))}
                                                 </tbody>
-                                            </table>
+                                                </table>
+                                            </div>
                                     </div>
                                 </div>
 
-                                    {/* AI Auto Review and Doctor Comments */}
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 border-t border-gray-200">
-                                        {/* AI Auto Review */}
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
-                                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-600">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 p-3 lg:p-6 border-t border-gray-200 dark:border-gray-600">
+                                        <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6 border-2 border-emerald-200 shadow-lg">
+                                            <h3 className="text-xl font-bold text-emerald-800 dark:text-emerald-700 mb-4 flex items-center">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-xl flex items-center justify-center mr-4 shadow-md">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white">
                                                         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                                             </svg>
                                         </div>
-                                                AI Auto Review
+                                                🤖 AI Auto Review
                                             </h3>
-                                            <div className="text-sm text-gray-700 leading-relaxed">
-                                                <p className="mb-2">
-                                                    <span className="font-semibold text-green-600">✓ Overall Assessment:</span> All blood parameters are within normal ranges.
-                                                </p>
-                                                <p className="mb-2">
-                                                    <span className="font-semibold text-blue-600">📊 Key Findings:</span> Complete Blood Count shows healthy blood cell counts and morphology.
-                                                </p>
-                                                <p className="mb-2">
-                                                    <span className="font-semibold text-purple-600">🔍 Recommendation:</span> Continue current lifestyle and regular monitoring.
-                                                </p>
-                                                <p className="text-xs text-gray-500 mt-3">
-                                                    Generated by AI • {new Date().toLocaleDateString()}
-                                                </p>
+                                            <div className="text-sm lg:text-base text-gray-700 leading-relaxed">
+                                                {report.aiDescription && report.aiDescription !== 'N/A' ? (
+                                                    <div className="bg-gradient-to-br from-white to-emerald-50 p-3 lg:p-5 rounded-xl border-2 border-emerald-300 shadow-md">
+                                                        <p className="text-emerald-800 dark:text-emerald-700 leading-relaxed font-medium text-sm lg:text-base">
+                                                            🤖 {report.aiDescription}
+                                                        </p>
+                                                    </div>
+                                                ) : null}
                                     </div>
                                                 </div>
 
-                                        {/* Doctor Comments */}
-                                        <div className="bg-gradient-to-br from-purple-50 to-violet-50 rounded-lg p-4 border border-purple-100">
-                                            <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                                                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-purple-600">
+                                        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border-2 border-amber-200 shadow-lg">
+                                            <h3 className="text-xl font-bold text-amber-800 dark:text-amber-700 mb-4 flex items-center">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl flex items-center justify-center mr-4 shadow-md">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-white">
                                                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                                                     </svg>
                                             </div>
-                                                Doctor Comments
+                                                👨‍⚕️ Doctor Comments
                                             </h3>
-                                            <div className="text-sm text-gray-700 leading-relaxed">
-                                                <p className="mb-2">
-                                                    <span className="font-semibold text-orange-600">👨‍⚕️ Dr. Smith:</span>
-                                                </p>
-                                                <p className="mb-3 pl-4 border-l-2 border-orange-200">
-                                                    "Patient's CBC results are excellent. All parameters are within normal limits, indicating good overall health. No immediate concerns or follow-up required."
-                                                </p>
-                                                <p className="mb-2">
-                                                    <span className="font-semibold text-gray-600">📅 Review Date:</span> {report.resultDate}
-                                                </p>
-                                                <p className="text-xs text-gray-500 mt-3">
-                                                    Reviewed by {report.doctor} • Department of {report.department}
-                                                </p>
+                                            <div className="text-sm lg:text-base text-gray-700 leading-relaxed">
+                                                {report.doctorComments && report.doctorComments.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        {report.doctorComments.map((comment: string, index: number) => (
+                                                            <div key={index} className="bg-gradient-to-br from-white to-amber-50 p-3 lg:p-5 rounded-xl border-2 border-amber-300 shadow-md">
+                                                                <p className="text-sm lg:text-base text-amber-800 dark:text-amber-700 font-medium">
+                                                                    <span className="font-bold text-amber-600">👨‍⚕️</span> {comment}
+                                                                </p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : null}
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Export Buttons */}
                             <div className="flex justify-end gap-4 mt-6">
-                                <button className="flex items-center gap-2 bg-gradient-to-r from-sky-300 to-violet-400 text-white px-6 py-3 rounded-lg hover:from-sky-400 hover:to-violet-500 transition-all font-medium shadow-sm hover:shadow-md">
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-                                    </svg>
-                                    Export Excel
-                                </button>
-                                <button className="flex items-center gap-2 bg-gradient-to-r from-sky-300 to-violet-400 text-white px-6 py-3 rounded-lg hover:from-sky-400 hover:to-violet-500 transition-all font-medium shadow-sm hover:shadow-md">
+                                <button 
+                                    onClick={handleExportPersonalRecord}
+                                    className="flex items-center gap-2 bg-gradient-to-r from-sky-300 to-violet-400 text-white px-4 lg:px-6 py-2 lg:py-3 rounded-lg hover:from-sky-400 hover:to-violet-500 transition-all font-medium shadow-sm hover:shadow-md text-sm lg:text-base"
+                                >
                                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                                         <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
                                     </svg>
@@ -586,118 +687,15 @@ function Home() {
                     )}
 
                     {activeTab === 'test-history' && (
-                        <div>
-                            {/* Test Results Table */}
-                            <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead className="bg-green-50">
-                                            <tr>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Test Result Code</th>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Patient Name</th>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Test Type</th>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Status</th>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Priority</th>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Result Date</th>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Doctor</th>
-                                                <th className="text-left py-4 px-6 font-semibold text-green-800">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {currentTestReports.map((report, index) => (
-                                                <tr key={report.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                                    <td className="py-4 px-6 text-gray-800 font-medium">{report.id}</td>
-                                                    <td className="py-4 px-6 text-gray-800">{report.patientName}</td>
-                                                    <td className="py-4 px-6 text-gray-600">{report.testType}</td>
-                                                    <td className="py-4 px-6">
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(report.status)}`}>
-                                                            {report.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-4 px-6">
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(report.priority)}`}>
-                                                            {report.priority}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-4 px-6 text-gray-600">{report.resultDate}</td>
-                                                    <td className="py-4 px-6 text-gray-600">{report.doctor}</td>
-                                                    <td className="py-4 px-6">
-                                                        <button 
-                                                            onClick={() => handleViewResult(report)}
-                                                            className="bg-gradient-to-r from-sky-300 to-violet-400 text-white px-4 py-2 rounded-lg hover:from-sky-400 hover:to-violet-500 transition-all text-sm font-medium shadow-sm hover:shadow-md" 
-                                                            title="View Results"
-                                                        >
-                                                            View Result
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                
-                                {/* Pagination Controls */}
-                                {totalPages > 1 && (
-                                    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
-                                        <div className="flex items-center text-sm text-gray-700">
-                                            <span>
-                                                Showing {startIndex + 1} to {Math.min(endIndex, testReports.length)} of {testReports.length} results
-                                            </span>
-                                        </div>
-                                        
-                                        <div className="flex items-center space-x-2">
-                                            {/* Previous Button */}
-                                            <button
-                                                onClick={() => handlePageChange(currentPage - 1)}
-                                                disabled={currentPage === 1}
-                                                className={`px-3 py-2 text-sm font-medium rounded-md ${
-                                                    currentPage === 1
-                                                        ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                                        : 'text-white bg-gradient-to-r from-sky-300 to-violet-400 hover:from-sky-400 hover:to-violet-500 transition-all'
-                                                }`}
-                                            >
-                                                Previous
-                                            </button>
-                                            
-                                            {/* Page Numbers */}
-                                            <div className="flex space-x-1">
-                                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                                    <button
-                                                        key={page}
-                                                        onClick={() => handlePageChange(page)}
-                                                        className={`px-3 py-2 text-sm font-medium rounded-md ${
-                                                            currentPage === page
-                                                                ? 'bg-gradient-to-r from-sky-300 to-violet-400 text-white'
-                                                                : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
-                                                        }`}
-                                                    >
-                                                        {page}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            
-                                            {/* Next Button */}
-                                            <button
-                                                onClick={() => handlePageChange(currentPage + 1)}
-                                                disabled={currentPage === totalPages}
-                                                className={`px-3 py-2 text-sm font-medium rounded-md ${
-                                                    currentPage === totalPages
-                                                        ? 'text-gray-400 cursor-not-allowed bg-gray-100'
-                                                        : 'text-white bg-gradient-to-r from-sky-300 to-violet-400 hover:from-sky-400 hover:to-violet-500 transition-all'
-                                                }`}
-                                            >
-                                                Next
-                                            </button>
-                                        </div>
-                        </div>
-                    )}
-                        </div>
-                        </div>
+                        <HistoryTest 
+                            testReports={testReports}
+                            userData={userData}
+                            onViewResult={handleViewResult}
+                        />
                     )}
                 </div>
             </div>
 
-            {/* View Results Modal */}
             <ViewResultsModal
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
@@ -709,3 +707,6 @@ function Home() {
 }
 
 export default Home;
+
+
+

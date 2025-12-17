@@ -1,0 +1,451 @@
+tags:
+  - name: Test Orders
+    description: API for managing test orders
+
+paths:
+  /api/test-orders/getMyTestOrders:
+    get:
+      summary: Get current user's test orders list
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Success
+        401:
+          description: Not authenticated
+
+  /api/test-orders/recordTestOrder:
+    post:
+      summary: Nurse or Admin records test order for patient
+      description: |
+        - If patient already has account: only need to enter email, system automatically retrieves information
+        - If patient doesn't have account: need to enter email + basic information (patient_name required)
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  description: Patient's email
+                patient_name:
+                  type: string
+                  description: Patient name (required if no account exists)
+                phone_number:
+                  type: string
+                  description: Phone number
+                address:
+                  type: string
+                  description: Address
+                gender:
+                  type: string
+                  enum: [male, female, other]
+                  description: Gender
+                age:
+                  type: integer
+                  description: Age
+                date_of_birth:
+                  type: string
+                  format: date
+                  description: Date of birth (YYYY-MM-DD)
+                order_code:
+                  type: string
+                  description: Order code (optional, system auto-generates if not provided)
+                status:
+                  type: string
+                  enum: [pending, processing, completed, cancelled]
+                  description: Order status (optional, default pending)
+                priority:
+                  type: string
+                  enum: [low, normal, high, urgent]
+                  description: Priority level (optional, default normal)
+                test_type:
+                  type: string
+                  description: Test type (optional, default General Check-up)
+                notes:
+                  type: string
+                  description: Additional notes (optional)
+      responses:
+        201:
+          description: Test order recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TestOrder"
+        400:
+          description: Missing required information (email) or account not activated or missing patient_name for new user
+        403:
+          description: Access denied (nurse/admin only)
+        401:
+          description: Not authenticated or invalid token
+
+  /api/test-orders/getCreatedTestOrders:
+    get:
+      summary: Nurse or Admin views list of test orders they created
+      description: Returns list of test orders created by the currently logged-in nurse/admin.
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Successfully retrieved test orders list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TestOrder"
+        403:
+          description: Access denied (nurse/admin only)
+        401:
+          description: Not authenticated or invalid token
+
+  /api/test-orders/updateTestOrder/{order_code}:
+    put:
+      summary: Nurse or Admin updates test order
+      description: |
+        - **Nurse** can only update test orders *they created (created_by)*  
+        - **Admin** can update all test orders  
+        - Can update **any field**, including patient info, priority, test_type, status, etc.
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Order code of test order to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestOrder"
+      responses:
+        200:
+          description: Test order updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TestOrder"
+        403:
+          description: No permission to edit this test order (nurse/admin only)
+        404:
+          description: Test order not found
+        500:
+          description: Server error
+
+  /api/test-orders/deleteTestOrder/{order_code}:
+    delete:
+      summary: Nurse or Admin deletes test order
+      description: |
+        - **Nurse** can only delete test orders *they created (created_by)*  
+        - **Admin** can delete **any** test order in the system  
+        - When deleted successfully, test order will be completely removed from database
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Order code of test order to delete
+      responses:
+        200:
+          description: Test order deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        403:
+          description: No permission to delete this test order (nurse/admin only)
+        404:
+          description: Test order not found
+        500:
+          description: Server error
+
+  /api/test-orders/updateTestOrderStatus/{order_code}:
+    put:
+      summary: Update test order status (doctor or nurse)
+      description: |
+        - **Doctor** can update status of any test order.  
+        - **Nurse** can only update test orders *they created (created_by)*.  
+        - Valid statuses include: `pending`, `processing`, `completed`, `cancelled`.
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Order code of test order to update status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+      responses:
+        200:
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TestOrder"
+        400:
+          description: Missing status information
+        403:
+          description: No permission to update
+        404:
+          description: Test order not found
+        500:
+          description: Server error
+
+  /api/test-orders/getTestOrderByCode/{order_code}:
+    get:
+      summary: Get test order by order_code
+      description: Get detailed information of a test order based on order_code. User can only view their own orders, admin/doctor/nurse can view all.
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Test order code
+      responses:
+        200:
+          description: Test order retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TestOrder"
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        404:
+          description: Test order not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+  /api/test-orders/getAllTestOrders:
+    get:
+      summary: Get all test orders with filters and pagination
+      description: Get list of all test orders with filtering, sorting and pagination capabilities. Includes overview statistics.
+      tags: [Test Orders]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Filter by status (pending, processing, completed, cancelled)
+        - in: query
+          name: priority
+          schema:
+            type: string
+          description: Filter by priority (normal, high, urgent)
+        - in: query
+          name: test_type
+          schema:
+            type: string
+          description: Filter by test type
+        - in: query
+          name: created_by
+          schema:
+            type: string
+          description: Filter by creator
+        - in: query
+          name: userid
+          schema:
+            type: string
+          description: Filter by user ID
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Current page
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Number of items per page
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+            default: created_at
+          description: Field to sort by (created_at, status, priority, etc.)
+        - in: query
+          name: sort_order
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort order
+      responses:
+        200:
+          description: Successfully retrieved test orders list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TestOrder"
+                  pagination:
+                    type: object
+                    properties:
+                      current_page:
+                        type: integer
+                      total_pages:
+                        type: integer
+                      total_items:
+                        type: integer
+                      items_per_page:
+                        type: integer
+                  statistics:
+                    type: object
+                    properties:
+                      total_orders:
+                        type: integer
+                      pending_orders:
+                        type: integer
+                      processing_orders:
+                        type: integer
+                      completed_orders:
+                        type: integer
+                      cancelled_orders:
+                        type: integer
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  error:
+                    type: string
+
+components:
+  schemas:
+    TestOrder:
+      type: object
+      properties:
+        _id:
+          type: string
+        userid:
+          type: string
+        created_by:
+          type: string
+        order_code:
+          type: string
+        patient_name:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+        gender:
+          type: string
+        age:
+          type: number
+        address:
+          type: string
+        phone_number:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+        priority:
+          type: string
+        test_type:
+          type: string
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

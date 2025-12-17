@@ -1,0 +1,350 @@
+tags:
+  - name: Reagent Supply
+    description: API quản lý nhập kho hóa chất (Supply History)
+
+paths:
+  /api/reagent-supply/getAllSupplyRecords:
+    get:
+      summary: Lấy danh sách lịch sử nhập kho (có lọc và phân trang)
+      description: Lọc theo tên hóa chất, nhà cung cấp, trạng thái, khoảng ngày nhận. Hỗ trợ phân trang.
+      tags: [Reagent Supply]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: reagent_name
+          schema:
+            type: string
+          description: Lọc theo tên hóa chất
+        - in: query
+          name: vendor_name
+          schema:
+            type: string
+          description: Lọc theo tên nhà cung cấp
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [received, partial_shipment, returned]
+          description: Trạng thái phiếu nhập
+        - in: query
+          name: from_date
+          schema:
+            type: string
+            format: date
+          description: Từ ngày (yyyy-mm-dd)
+        - in: query
+          name: to_date
+          schema:
+            type: string
+            format: date
+          description: Đến ngày (yyyy-mm-dd)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Trang hiện tại
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+          description: Số bản ghi mỗi trang
+      responses:
+        200:
+          description: Lấy danh sách phiếu nhập thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      records:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ReagentSupplyRecord"
+                      pagination:
+                        type: object
+                        properties:
+                          current_page:
+                            type: integer
+                          total_pages:
+                            type: integer
+                          total_records:
+                            type: integer
+                          per_page:
+                            type: integer
+        500:
+          description: Lỗi server khi lấy danh sách phiếu nhập
+
+  /api/reagent-supply/getSupplyRecordById/{id}:
+    get:
+      summary: Xem chi tiết phiếu nhập theo supply_id
+      tags: [Reagent Supply]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Mã phiếu nhập (supply_id)
+      responses:
+        200:
+          description: Lấy phiếu nhập thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/ReagentSupplyRecord"
+        404:
+          description: Không tìm thấy phiếu nhập
+        500:
+          description: Lỗi server khi lấy phiếu nhập
+
+  /api/reagent-supply/createSupplyRecord:
+    post:
+      summary: Tạo phiếu nhập mới và cập nhật tồn kho (nếu trạng thái là received)
+      tags: [Reagent Supply]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reagent_name
+                - catalog_number
+                - vendor_name
+                - vendor_id
+                - po_number
+                - order_date
+                - receipt_date
+                - quantity_received
+                - unit_of_measure
+                - lot_number
+                - expiration_date
+                - storage_location
+              properties:
+                reagent_name:
+                  type: string
+                catalog_number:
+                  type: string
+                vendor_name:
+                  type: string
+                vendor_id:
+                  type: string
+                po_number:
+                  type: string
+                order_date:
+                  type: string
+                  format: date
+                receipt_date:
+                  type: string
+                  format: date
+                quantity_received:
+                  type: number
+                unit_of_measure:
+                  type: string
+                lot_number:
+                  type: string
+                expiration_date:
+                  type: string
+                  format: date
+                storage_location:
+                  type: string
+                status:
+                  type: string
+                  enum: [received, partial_shipment, returned]
+      responses:
+        201:
+          description: Tạo phiếu nhập thành công (và cập nhật kho nếu trạng thái là received)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      supply_record:
+                        $ref: "#/components/schemas/ReagentSupplyRecord"
+                      reagent_name:
+                        type: string
+                      previous_quantity:
+                        type: number
+                      received_quantity:
+                        type: number
+                      new_total_quantity:
+                        type: number
+                      inventory_updated:
+                        type: boolean
+        400:
+          description: Thiếu trường bắt buộc hoặc User ID không hợp lệ
+        404:
+          description: Không tìm thấy reagent tương ứng
+        500:
+          description: Lỗi server khi tạo phiếu nhập
+
+  /api/reagent-supply/updateSupplyRecord/{id}:
+    put:
+      summary: Cập nhật phiếu nhập theo supply_id (tự động điều chỉnh tồn kho nếu cần)
+      tags: [Reagent Supply]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Mã phiếu nhập (supply_id)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Các trường cho phép cập nhật (không cho phép thay đổi reagent_name, catalog_number, supply_id)
+      responses:
+        200:
+          description: Cập nhật phiếu nhập (và tồn kho nếu áp dụng) thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    oneOf:
+                      - $ref: "#/components/schemas/ReagentSupplyRecord"
+                      - type: object
+                        properties:
+                          supply_record:
+                            $ref: "#/components/schemas/ReagentSupplyRecord"
+                          reagent_name:
+                            type: string
+                          previous_quantity:
+                            type: number
+                          quantity_adjustment:
+                            type: number
+                          new_reagent_quantity:
+                            type: number
+                          status_changed:
+                            type: boolean
+        400:
+          description: Trạng thái không hợp lệ hoặc dữ liệu không hợp lệ
+        404:
+          description: Không tìm thấy phiếu nhập
+        500:
+          description: Lỗi server khi cập nhật phiếu nhập
+
+  /api/reagent-supply/deleteSupplyRecord/{id}:
+    delete:
+      summary: Xóa phiếu nhập theo supply_id (và hoàn tồn nếu phiếu ở trạng thái received)
+      tags: [Reagent Supply]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Mã phiếu nhập (supply_id)
+      responses:
+        200:
+          description: Xóa phiếu nhập thành công (và cập nhật tồn kho nếu áp dụng)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      deleted_record:
+                        $ref: "#/components/schemas/ReagentSupplyRecord"
+                      reagent_quantity_reverted:
+                        type: number
+                      inventory_updated:
+                        type: boolean
+        404:
+          description: Không tìm thấy phiếu nhập
+        500:
+          description: Lỗi server khi xóa phiếu nhập
+
+components:
+  schemas:
+    ReagentSupplyRecord:
+      type: object
+      properties:
+        _id:
+          type: string
+        supply_id:
+          type: string
+        reagent_name:
+          type: string
+        catalog_number:
+          type: string
+        vendor_name:
+          type: string
+        vendor_id:
+          type: string
+        po_number:
+          type: string
+        order_date:
+          type: string
+          format: date-time
+        receipt_date:
+          type: string
+          format: date-time
+        quantity_received:
+          type: number
+        unit_of_measure:
+          type: string
+        lot_number:
+          type: string
+        expiration_date:
+          type: string
+          format: date-time
+        received_by_doctor:
+          type: string
+        storage_location:
+          type: string
+        status:
+          type: string
+          enum: [received, partial_shipment, returned]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

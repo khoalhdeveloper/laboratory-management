@@ -1,7 +1,9 @@
 
 import { useState, useEffect, useRef } from 'react';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
 
 function Footer() {
+    const { isDarkMode: _isDarkMode } = useGlobalTheme();
     const [isVisible, setIsVisible] = useState(false);
     const footerRef = useRef<HTMLElement>(null);
 
@@ -47,8 +49,7 @@ function Footer() {
                             </span>
                         </div>
                         <p className="mt-4 text-sm opacity-90 dark:opacity-80 max-w-xs">
-                            Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor
-                            incididunt ut labore et dolore magna aliqua
+                           LabTrack provides accurate testing services for blood, kidney function, and urine analysis to support early diagnosis and effective health monitoring
                         </p>
                         <div className="mt-4 flex items-center gap-3 text-white/80">
                             {/* social icons */}

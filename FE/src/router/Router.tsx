@@ -11,12 +11,18 @@ import Error from '../source/page/Home/Error'
 import Login from '../source/page/Home/Login'
 import ResetPassword from '../source/page/Home/ResetPassword'
 
+
 import AdminHome from '../source/page/Admin/Home'
 import Dashboard from '../source/page/Admin/Dashboard'
 import Accounts from '../source/page/Admin/Accounts'
-import Doctors from '../source/page/Admin/Doctors'
 import AdminEventLog from '../source/page/Admin/EventLog'
 import AdminReagentHistory from '../source/page/Admin/ReagentHistory'
+import AdminInstrument from '../source/page/Admin/Intrucment'
+import AdminTestOrders from '../source/page/Admin/TestOrders'
+import AdminTestOrderDetail from '../source/page/Admin/TestOrderDetail'
+import Configuration from '../source/page/Admin/Configuration'
+import EditProfile from '../source/page/Admin/EditProfile'
+import CreateShift from '../source/page/Admin/CreateShift';
 
 import NurseHome from '../source/page/Nurse/Home'
 import NurseLayout from '../source/page/Nurse/Layout'
@@ -28,23 +34,36 @@ import EditTestOrder from '../source/page/Nurse/EditTestOrder'
 import DeviceCheck from '../source/page/Nurse/DeviceCheck'
 import ReagentsTable from '../source/page/Nurse/ReagentsTable'
 import BloodTestExecution from '../source/page/Nurse/BloodTestExecution'
+import StoolUrineTestExecution from '../source/page/Nurse/StoolUrineTestExecution'
+import UrineTestExecution from '../source/page/Nurse/UrineTestExecution'
 import ResultsList from '../source/page/Nurse/ResultsList'
 import ViewResults from '../source/page/Nurse/ViewResults'
 import InstrucmentNurse from '../source/page/Nurse/InstrucmentsNurse'
+import NurseEventLog from '../source/page/Nurse/EventLog'
+import GroupCall from '../source/page/Nurse/GroupCall'
 
 import PatientSidebar from '../source/page/Patient/Sidebar'
 import PatientHeader from '../source/page/Patient/Header'
 import PatientHome from '../source/page/Patient/Home'
 import PatientProfile from '../source/page/Patient/Profile'
 import IncompleteProfile from '../source/page/Patient/IncompleteProfile'
+import PatientZegoCloud from '../source/page/Patient/PatientZegoCloud'
+import NurseZegoCloud from '../source/page/Nurse/NurseZegoCloud'
 
 import DoctorLayout from '../source/page/Doctor/DoctorLayout'
-import DoctorHome from '../source/page/Doctor/Home'
 import DoctorDashboard from '../source/page/Doctor/Dashboard'
+import DoctorProfile from '../source/page/Doctor/Profile'
 import EventLog from '../source/page/Doctor/EventLog'
 import Instrucment from '../source/page/Doctor/Instrucment'
 import ReagentHistory from '../source/page/Doctor/ReagentHistory'
+import DoctorSchedule from '../source/page/Doctor/Schedule'
+import SickRoom from '../source/page/Doctor/SickRoom'
 import ReagentHistoryNurse from '@/source/page/Nurse/ReagentHistoryNurse'
+import Schedule from '@/source/page/Nurse/Schedule'
+import PatientSchedule from '@/source/page/Patient/Schedule'
+
+import Blog from '../source/page/Home/Blog'
+import AdminBlog from '../source/page/Admin/AdminBlog'
 
 // Define AppRoute type
 export type AppRoute = {
@@ -80,6 +99,10 @@ export const routes: AppRoute[] = [
       {
         path: "contact",
         element: <Contact />
+      },
+      {
+        path: "blog",
+        element: <Blog />
       }
     ]
   },
@@ -110,16 +133,40 @@ export const routes: AppRoute[] = [
         element: <Accounts />
       },
       {
-        path: "doctors",
-        element: <Doctors />
-      },
-      {
         path: "event-log",
         element: <AdminEventLog />
       },
       {
         path: "reagent-history",
         element: <AdminReagentHistory />
+      },
+      {
+        path: "instrument",
+        element: <AdminInstrument />
+      },
+      {
+        path: "test-orders",
+        element: <AdminTestOrders />
+      },
+      {
+        path: "test-orders/detail/:orderCode",
+        element: <AdminTestOrderDetail />
+      },
+      {
+        path: "configuration",
+        element: <Configuration />
+      },
+      {
+        path: "edit-profile",
+        element: <EditProfile />
+      },
+      {
+        path: "shifts/create",
+        element: <CreateShift />
+      },
+      {
+        path: "blog",
+        element: <AdminBlog />
       }
     ]
   },
@@ -152,7 +199,16 @@ export const routes: AppRoute[] = [
       {
         path: "incomplete-profile",
         element: <IncompleteProfile />
+      },
+      {
+        path: "consultation/:consultationId/zegocloud",
+        element: <PatientZegoCloud />
+      },
+      {
+        path: "schedule",
+        element: <PatientSchedule />
       }
+
     ]
   },
   {
@@ -170,6 +226,10 @@ export const routes: AppRoute[] = [
       {
         path: "profile",
         element: <NurseProfile />
+      },
+      {
+        path: "incomplete-profile",
+        element: <IncompleteProfile />
       },
       {
         path: "test-orders",
@@ -196,6 +256,14 @@ export const routes: AppRoute[] = [
         element: <BloodTestExecution />
       },
       {
+        path: "test-orders/stool-urine-test-execution",
+        element: <StoolUrineTestExecution />
+      },
+      {
+        path: "test-orders/urine-test-execution",
+        element: <UrineTestExecution />
+      },
+      {
         path: "results",
         element: <ResultsList />
       },
@@ -208,12 +276,32 @@ export const routes: AppRoute[] = [
         element: <ReagentHistoryNurse />
       },
       {
-        path: "test-orders/detail/:orderId",
+        path: "eventlog",
+        element: <NurseEventLog />
+      },
+      {
+        path: "test-orders/detail/:orderCode",
         element: <TestOrderDetail />
       },
       {
         path: "results/view/:resultId",
         element: <ViewResults />
+      },
+      {
+        path: "schedule",
+        element: <Schedule />
+      },
+      {
+        path: "consultation/:consultationId/zegocloud",
+        element: <NurseZegoCloud />
+      },
+      {
+        path: "group-call",
+        element: <GroupCall />
+      },
+      {
+        path: "group-call/room/:roomId",
+        element: <NurseZegoCloud />
       }
     ]
   },
@@ -223,11 +311,15 @@ export const routes: AppRoute[] = [
     nested: [
       {
         path: "",
-        element: <DoctorHome />
+        element: <DoctorDashboard />
       },
       {
         path: "dashboard",
         element: <DoctorDashboard />
+      },
+      {
+        path: "profile",
+        element: <DoctorProfile />
       },
       {
         path: "event-log",
@@ -240,6 +332,14 @@ export const routes: AppRoute[] = [
       {
         path: "reagent-history",
         element: <ReagentHistory />
+      },
+      {
+        path: "schedule",
+        element: <DoctorSchedule />
+      },
+      {
+        path: "sick-room",
+        element: <SickRoom />
       }
     ]
   }
@@ -266,13 +366,13 @@ export const generateRoutes = (routes: AppRoute[]) => {
 };
 
 function Router() {
-    return (
-        <Routes>
-            {generateRoutes(routes)}
-            <Route path="/error" element={<Error />} />
-            <Route path="*" element={<Error />} />
-        </Routes>
-    )
+  return (
+    <Routes>
+      {generateRoutes(routes)}
+      <Route path="/error" element={<Error />} />
+      <Route path="*" element={<Error />} />
+    </Routes>
+  )
 }
 
 export default Router

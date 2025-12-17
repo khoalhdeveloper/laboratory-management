@@ -6,7 +6,9 @@ const ToastContainer: React.FC = () => {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
   useEffect(() => {
-    const unsubscribe = toastManager.subscribe(setToasts)
+    const unsubscribe = toastManager.subscribe((newToasts) => {
+      setToasts(newToasts)
+    })
     return unsubscribe
   }, [])
 
@@ -38,27 +40,48 @@ const ToastContainer: React.FC = () => {
     }
   }
 
-  if (toasts.length === 0) return null
 
   return (
-    <div className="fixed top-4 right-4 z-50 space-y-2">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`flex items-center p-4 rounded-lg border shadow-lg min-w-[300px] animate-in slide-in-from-right-full duration-300 ${getToastStyles(toast.type)}`}
-        >
-          {getToastIcon(toast.type)}
-          <span className="ml-3 text-sm font-medium flex-1">
-            {toast.message}
-          </span>
-          <button
-            onClick={() => toastManager.remove(toast.id)}
-            className="ml-2 flex-shrink-0 p-1 rounded-full hover:bg-black hover:bg-opacity-10 transition-colors"
+    <div className="fixed top-4 right-4 z-[9999] space-y-2 pointer-events-none">
+      {toasts.map((toast) => {
+        return (
+          <div
+            key={toast.id}
+            className={`flex items-center p-4 rounded-lg border shadow-xl min-w-[300px] max-w-[400px] transform transition-all duration-300 ease-in-out pointer-events-auto ${getToastStyles(toast.type)}`}
+            style={{
+              animation: 'slideInRight 0.3s ease-out',
+              position: 'relative',
+              zIndex: 10000
+            }}
           >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      ))}
+            {getToastIcon(toast.type)}
+            <span className="ml-3 text-sm font-medium flex-1">
+              {toast.message}
+            </span>
+            <button
+              onClick={() => {
+                toastManager.remove(toast.id)
+              }}
+              className="ml-2 flex-shrink-0 p-1 rounded-full hover:bg-black hover:bg-opacity-10 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )
+      })}
+      
+      <style>{`
+        @keyframes slideInRight {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   )
 }

@@ -1,0 +1,63 @@
+Fecal Analysis (Stool Test)
+===========================
+
+Description:
+A Fecal (Stool) Analysis is a series of tests on a stool sample to help diagnose digestive tract conditions. These tests can detect blood, fat, pathogens (bacteria, viruses, parasites), or inflammatory markers, helping to detect infections, poor nutrient absorption, or inflammatory bowel disease (IBD).
+
+Parameters:
+
+1. Fecal Occult Blood Test (FOBT)
+   - Description: Tests for hidden (occult) blood in the stool, a potential sign of gastrointestinal bleeding.
+   - Normal Range: Negative
+
+2. Leukocytes (WBC-s)
+   - Description: Measures the presence of white blood cells, which indicates inflammation in the intestines (e.g., from infection).
+   - Normal Range: Negative or None seen
+
+3. Fecal Fat
+   - Description: Measures the amount of fat in the stool to diagnose conditions related to poor fat absorption or malabsorption.
+   - Normal Range: <7 g/24h (Varies by diet)
+
+4. Ova & Parasites (O&P)
+   - Description: A microscopic exam to look for parasites (like Giardia, amoeba) or their eggs (ova) that cause intestinal infections.
+   - Normal Range: Negative or No ova or parasites seen
+
+5. pH
+   - Description: Measures the acidity or alkalinity of the stool. Abnormal pH can suggest various digestive issues.
+   - Normal Range: 7.0-7.5 (Neutral to slightly alkaline)
+
+6. Reducing Substances
+   - Description: Detects unabsorbed sugars (like lactose) often used to identify carbohydrate malabsorption or intolerance.
+   - Normal Range: Negative
+
+7. Fecal Calprotectin
+   - Description: Measures the level of calprotectin, a protein released by WBCs. High levels strongly indicate inflammation (e.g., IBD).
+   - Normal Range: <50 mcg/g
+
+8. Color / Consistency
+   - Description: A visual inspection. Normal is typically brown and formed. Abnormalities (e.g., black, clay, watery) suggest various conditions.
+   - Normal Range: Brown (Formed to slightly soft)
+
+Clinical Significance:
+
+- FOBT (Positive): May indicate gastrointestinal bleeding, ulcers, polyps, or colorectal cancer
+- Leukocytes (Present): Suggests inflammatory bowel disease, bacterial infection, or colitis
+- Fecal Fat (High): May indicate malabsorption, pancreatic insufficiency, or celiac disease
+- O&P (Positive): Indicates parasitic infection (e.g., Giardia, Entamoeba, worms)
+- pH (Abnormal): Low pH may suggest carbohydrate malabsorption; high pH may indicate bacterial overgrowth
+- Reducing Substances (Positive): May indicate lactose intolerance or carbohydrate malabsorption
+- Fecal Calprotectin (High): Strong indicator of inflammatory bowel disease (Crohn's, ulcerative colitis)
+- Color Abnormalities:
+  - Black/Tarry: Upper GI bleeding
+  - Red: Lower GI bleeding or hemorrhoids
+  - Clay/Pale: Bile duct obstruction or liver disease
+  - Green: Rapid transit, certain foods, or antibiotics
+  - Watery: Diarrhea, infection, or IBD
+
+When to Test:
+- Suspected gastrointestinal bleeding (dark or bloody stools)
+- Chronic diarrhea or abdominal pain
+- Suspected parasitic or bacterial infection
+- Monitoring inflammatory bowel disease
+- Investigating malabsorption or weight loss
+- Colorectal cancer screening

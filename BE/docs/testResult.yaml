@@ -1,0 +1,800 @@
+tags:
+  - name: Test Results
+    description: Test result management (Create and Get)
+
+paths:
+  /api/test-results/createTestResult/{order_code}:
+    post:
+      summary: Doctor or Nurse creates test result by order_code
+      description: Only doctors or nurses are allowed to create test results for test orders. Test order must be in "processing" status. Each order_code can only have one unique test result. Automatically updates test order status to 'completed'.
+      tags: [Test Results]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Test order code
+          example: ORD-1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - result_summary
+              properties:
+                result_summary:
+                  type: string
+                  description: Test result summary
+                  example: Normal test results
+                result_details:
+                  type: string
+                  description: Detailed test results
+                  example: RBC, WBC, HGB within normal range
+                wbc_value:
+                  type: number
+                  description: WBC (White Blood Cell) value
+                  example: 7.5
+                rbc_value:
+                  type: number
+                  description: RBC (Red Blood Cell) value
+                  example: 4.5
+                hgb_value:
+                  type: number
+                  description: HGB (Hemoglobin) value
+                  example: 14.0
+                hct_value:
+                  type: number
+                  description: HCT (Hematocrit) value
+                  example: 42.0
+                plt_value:
+                  type: number
+                  description: PLT (Platelet) value
+                  example: 250
+                mcv_value:
+                  type: number
+                  description: MCV (Mean Corpuscular Volume) value
+                  example: 85
+                mch_value:
+                  type: number
+                  description: MCH (Mean Corpuscular Hemoglobin) value
+                  example: 28
+                mchc_value:
+                  type: number
+                  description: MCHC (Mean Corpuscular Hemoglobin Concentration) value
+                  example: 33
+                flag:
+                  type: string
+                  description: Result flag
+                  example: normal
+                status:
+                  type: string
+                  description: Result status
+                  example: completed
+                instrument_id:
+                  type: string
+                  description: ID of instrument used (will automatically get name)
+                  example: EQ-1001
+      responses:
+        201:
+          description: Test result created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test result created successfully
+                  data:
+                    $ref: "#/components/schemas/TestResult"
+        400:
+          description: Test order already has result, missing required information or not in processing status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: This test order already has a test result. Each order_code can only have one unique test result.
+                  existing_result_id:
+                    type: string
+                    example: 671234abcd7890ef12345678
+        404:
+          description: Test order not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test order not found
+        403:
+          description: Access denied (doctor/nurse only)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Access denied. Only doctor or nurse can create test results.
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Server error
+                  error:
+                    type: string
+                    example: Error message details
+
+  /api/test-results/getTestResultByOrderCode/{order_code}:
+    get:
+      summary: View test result by order_code
+      description: Get test result information by order code. Admin, doctor, nurse can view all. User can only view their own results.
+      tags: [Test Results]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Test order code
+          example: ORD-1
+      responses:
+        200:
+          description: Test result retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test result retrieved successfully
+                  data:
+                    $ref: "#/components/schemas/TestResultResponse"
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Access denied
+        404:
+          description: Test order or result not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: No test result available for this test order
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Server error
+                  error:
+                    type: string
+                    example: Error message details
+
+  /api/test-results/getMyTestResults:
+    get:
+      summary: User views their own test results
+      description: Logged-in user can view all their own test results. Only requires valid token, no special role needed.
+      tags: [Test Results]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Test results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Your test results retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testOrder:
+                          type: object
+                          properties:
+                            order_code:
+                              type: string
+                              example: ORD-1
+                            patient_name:
+                              type: string
+                              example: Nguyen The Van
+                            userid:
+                              type: string
+                              example: User20
+                            status:
+                              type: string
+                              example: completed
+                            test_type:
+                              type: string
+                              example: Blood Test
+                            created_at:
+                              type: string
+                              format: date-time
+                        testResult:
+                          type: object
+                          properties:
+                            result_summary:
+                              type: string
+                              example: Normal test results
+                            result_details:
+                              type: string
+                              example: Detailed test results
+                            wbc_value:
+                              type: number
+                              example: 7.5
+                            rbc_value:
+                              type: number
+                              example: 4.5
+                            hgb_value:
+                              type: number
+                              example: 14.0
+                            hct_value:
+                              type: number
+                              example: 42.0
+                            plt_value:
+                              type: number
+                              example: 250
+                            mcv_value:
+                              type: number
+                              example: 85
+                            mch_value:
+                              type: number
+                              example: 28
+                            mchc_value:
+                              type: number
+                              example: 33
+                            flag:
+                              type: string
+                              example: normal
+                            status:
+                              type: string
+                              example: completed
+                            doctor_name:
+                              type: string
+                              example: Dr. Nguyen Van A
+                            instrument_id:
+                              type: string
+                              example: EQ-1001
+                            instrument_name:
+                              type: string
+                              example: Hematology Analyzer XN-1000
+                            created_at:
+                              type: string
+                              format: date-time
+                  total:
+                    type: number
+                    example: 2
+        401:
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User not authenticated
+        404:
+          description: No test orders or results found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: No test results available for you
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Server error
+                  error:
+                    type: string
+                    example: Error message details
+
+  /api/test-results/getAllTestResults:
+    get:
+      summary: Doctor/Nurse/Admin views all test results
+      description: Get all test results in the system. Only doctors, nurses, admins have access.
+      tags: [Test Results]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: All test results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: All test results retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testOrder:
+                          type: object
+                          properties:
+                            order_code:
+                              type: string
+                              example: ORD-1
+                            patient_name:
+                              type: string
+                              example: Nguyen The Van
+                            userid:
+                              type: string
+                              example: User20
+                            status:
+                              type: string
+                              example: completed
+                            test_type:
+                              type: string
+                              example: Blood Test
+                            created_at:
+                              type: string
+                              format: date-time
+                        testResult:
+                          type: object
+                          properties:
+                            result_summary:
+                              type: string
+                              example: Normal test results
+                            result_details:
+                              type: string
+                              example: Detailed test results
+                            wbc_value:
+                              type: number
+                              example: 7.5
+                            rbc_value:
+                              type: number
+                              example: 4.5
+                            hgb_value:
+                              type: number
+                              example: 14.0
+                            hct_value:
+                              type: number
+                              example: 42.0
+                            plt_value:
+                              type: number
+                              example: 250
+                            mcv_value:
+                              type: number
+                              example: 85
+                            mch_value:
+                              type: number
+                              example: 28
+                            mchc_value:
+                              type: number
+                              example: 33
+                            flag:
+                              type: string
+                              example: normal
+                            status:
+                              type: string
+                              example: completed
+                            doctor_name:
+                              type: string
+                              example: Dr. Nguyen Van A
+                            instrument_id:
+                              type: string
+                              example: EQ-1001
+                            instrument_name:
+                              type: string
+                              example: Hematology Analyzer XN-1000
+                            created_at:
+                              type: string
+                              format: date-time
+                  total:
+                    type: number
+                    example: 5
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Access denied. Only doctor, nurse or admin can view all test results.
+        404:
+          description: No test results available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: No test results available in the system
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Server error
+                  error:
+                    type: string
+                    example: Error message details
+
+  /api/test-results/getMyPerformedTestResults:
+    get:
+      summary: Doctor/Nurse views test results they performed
+      description: Get list of all test results that the current doctor/nurse has performed (created). Only doctors, nurses, admins have access.
+      tags: [Test Results]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Test results you performed retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test results you performed retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        testOrder:
+                          type: object
+                          properties:
+                            order_code:
+                              type: string
+                              example: ORD-1
+                            patient_name:
+                              type: string
+                              example: Nguyen The Van
+                            userid:
+                              type: string
+                              example: User20
+                            status:
+                              type: string
+                              example: completed
+                            test_type:
+                              type: string
+                              example: Blood Test
+                            created_at:
+                              type: string
+                              format: date-time
+                        testResult:
+                          type: object
+                          properties:
+                            result_summary:
+                              type: string
+                              example: Normal test results
+                            result_details:
+                              type: string
+                              example: Detailed test results
+                            wbc_value:
+                              type: number
+                              example: 7.5
+                            rbc_value:
+                              type: number
+                              example: 4.5
+                            hgb_value:
+                              type: number
+                              example: 14.0
+                            hct_value:
+                              type: number
+                              example: 42.0
+                            plt_value:
+                              type: number
+                              example: 250
+                            mcv_value:
+                              type: number
+                              example: 85
+                            mch_value:
+                              type: number
+                              example: 28
+                            mchc_value:
+                              type: number
+                              example: 33
+                            flag:
+                              type: string
+                              example: normal
+                            status:
+                              type: string
+                              example: completed
+                            doctor_name:
+                              type: string
+                              example: Dr. Nguyen Van A
+                            instrument_id:
+                              type: string
+                              example: EQ-1001
+                            instrument_name:
+                              type: string
+                              example: Hematology Analyzer XN-1000
+                            created_at:
+                              type: string
+                              format: date-time
+                  total:
+                    type: number
+                    example: 3
+        401:
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User not authenticated
+        403:
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Access denied. Only doctor, nurse or admin can view their performed test results.
+        404:
+          description: No test results performed yet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: You haven't performed any test results yet
+        500:
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Server error
+                  error:
+                    type: string
+                    example: Error message details
+
+  /api/test-results/sendTestResultEmail/{order_code}:
+    post:
+      summary: Send test result email to patient
+      description: Send email containing detailed test results to patient by order_code
+      tags: [Test Results]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Test order code
+          example: ORD-1
+      responses:
+        200:
+          description: Email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Email sent successfully
+                  emailResult:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+                      messageId:
+                        type: string
+                        example: <abc123@example.com>
+        404:
+          description: Test order or test result not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Test order not found
+        403:
+          description: Access denied
+        500:
+          description: Server error
+
+components:
+  schemas:
+    TestResult:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 671234abcd7890ef12345678
+        test_order_id:
+          type: string
+          example: 670ffe80f2e8d4e8c39a29f1
+        doctor_id:
+          type: string
+          example: 670ffe8a5a9d7f38b30e2a90
+        doctor_name:
+          type: string
+          example: Dr. Nguyen Van A
+        instrument_id:
+          type: string
+          example: EQ-1001
+        instrument_name:
+          type: string
+          example: Hematology Analyzer XN-1000
+        result_summary:
+          type: string
+          example: Normal blood test results
+        result_details:
+          type: string
+          example: RBC, WBC, HGB within normal range
+        wbc_value:
+          type: number
+          example: 5.6
+        rbc_value:
+          type: number
+          example: 4.7
+        hgb_value:
+          type: number
+          example: 13.2
+        hct_value:
+          type: number
+          example: 42.1
+        plt_value:
+          type: number
+          example: 220
+        mcv_value:
+          type: number
+          example: 87.6
+        mch_value:
+          type: number
+          example: 29.5
+        mchc_value:
+          type: number
+          example: 32.6
+        flag:
+          type: string
+          example: normal
+        status:
+          type: string
+          example: completed
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TestResultResponse:
+      type: object
+      properties:
+        testOrder:
+          type: object
+          properties:
+            order_code:
+              type: string
+              example: ORD-1
+            patient_name:
+              type: string
+              example: Nguyen The Van
+            userid:
+              type: string
+              example: User20
+            status:
+              type: string
+              example: completed
+            test_type:
+              type: string
+              example: Blood Test
+            created_at:
+              type: string
+              format: date-time
+        testResult:
+          type: object
+          properties:
+            result_summary:
+              type: string
+              example: Normal test results
+            result_details:
+              type: string
+              example: Detailed test results
+            wbc_value:
+              type: number
+              example: 7.5
+            rbc_value:
+              type: number
+              example: 4.5
+            hgb_value:
+              type: number
+              example: 14.0
+            hct_value:
+              type: number
+              example: 42.0
+            plt_value:
+              type: number
+              example: 250
+            mcv_value:
+              type: number
+              example: 85
+            mch_value:
+              type: number
+              example: 28
+            mchc_value:
+              type: number
+              example: 33
+            flag:
+              type: string
+              example: normal
+            status:
+              type: string
+              example: completed
+            doctor_name:
+              type: string
+              example: Dr. Nguyen Van A
+            instrument_id:
+              type: string
+              example: EQ-1001
+            instrument_name:
+              type: string
+              example: Hematology Analyzer XN-1000
+            created_at:
+              type: string
+              format: date-time

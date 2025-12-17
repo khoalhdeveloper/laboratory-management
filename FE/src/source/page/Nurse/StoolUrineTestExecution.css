@@ -1,0 +1,386 @@
+/* Import progress animation styles from BloodTestExecution */
+@keyframes pulseStripe {
+  0% { opacity: 0.2; transform: translateX(-20%); }
+  50% { opacity: 0.6; }
+  100% { opacity: 0.2; transform: translateX(100%); }
+}
+
+.progress-animated {
+  position: relative;
+}
+
+.progress-animated::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+  mix-blend-mode: screen;
+  animation: pulseStripe 1.2s linear infinite;
+}
+
+/* Subtle dotted grid pattern for the main panel */
+.panel-pattern {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(148,163,184,0.18) 1px, transparent 0),
+    radial-gradient(circle at 1px 1px, rgba(148,163,184,0.08) 1px, transparent 0);
+  background-size: 16px 16px, 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
+/* Progress dot that follows the bar */
+.progress-dot {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  box-shadow: 0 0 10px rgba(255,255,255,0.6);
+  transition: left 0.3s ease;
+}
+
+/* Simulation Container with Machine */
+.simulation-container-with-machine {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 450px; /* Ensure minimum height to fit all elements */
+  gap: 5px;
+    padding: 20px 20px 60px 20px; /* Add more padding top and bottom for spacing */
+  max-width: 100%;
+}
+
+/* Pipette Section - Above and Slightly Left of Machine */
+.pipette-section {
+  /* place pipette absolutely so it remains visible near the top-left of the machine */
+  position: absolute;
+  top: 10px; /* Position inside visible area */
+  left: 15%; /* Position on the left side */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  z-index: 40; /* above the machine image */
+  order: 1;
+  transform: none;
+}
+
+/* Pipette Bulb (phần bóng trên) */
+.pipette-section::before {
+  content: "";
+  width: 28px;
+  height: 35px;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 50%, #a5b4fc 100%);
+  border-radius: 50% 50% 20% 20%;
+  position: relative;
+  margin-bottom: 2px;
+  box-shadow: 
+    inset -2px -2px 8px rgba(0,0,0,0.15),
+    inset 2px 2px 8px rgba(255,255,255,0.8),
+    0 4px 12px rgba(139, 92, 246, 0.3);
+  border: 1.5px solid #818cf8;
+  z-index: 13;
+}
+
+/* Compact Pipette Tip */
+.pipette-tip-compact {
+  width: 14px;
+  height: 45px;
+  background: linear-gradient(to bottom, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+  clip-path: polygon(30% 0%, 70% 0%, 100% 100%, 0% 100%);
+  position: relative;
+  z-index: 12;
+  box-shadow: 
+    0 4px 8px rgba(79, 70, 229, 0.4),
+    inset 1px 1px 2px rgba(255,255,255,0.3);
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+}
+
+/* Pipette liquid indicator (vạch chỉ mức) */
+.pipette-tip-compact::before {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.4);
+  z-index: 1;
+}
+
+.pipette-tip-compact::after {
+  content: "";
+  position: absolute;
+  top: 25px;
+  left: 2px;
+  right: 2px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.4);
+  z-index: 1;
+}
+
+/* Compact Drop */
+.drop-compact {
+  width: 20px;
+  height: 20px;
+  background: radial-gradient(circle at 35% 35%, #ff8a80 0%, #e53935 55%, #b71c1c 100%);
+  border-radius: 50%;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 58px; /* start below tip */
+  opacity: 1; /* visible by default */
+  transition: opacity 0.25s ease-in;
+  box-shadow: 0 4px 10px rgba(229, 57, 53, 0.55), 0 0 14px rgba(229, 57, 53, 0.35);
+  border: 2px solid rgba(255,255,255,0.9);
+  z-index: 50; /* above everything */
+  pointer-events: none;
+}
+
+/* Drop falling animation - straight down from pipette */
+.drop-compact.drop-falling {
+  animation: fallStraightDown 1.8s cubic-bezier(.25,.6,.3,1) forwards;
+  opacity: 1;
+}
+
+@keyframes fallStraightDown {
+  0% {
+    transform: translate(-50%, 0);
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, 210px); /* land near strip */
+    opacity: 0;
+  }
+}
+
+/* Machine Section - Below Pipette */
+.machine-section {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 1;
+  width: 100%;
+  max-width: 100%;
+  order: 2;
+}
+
+/* Machine Image */
+.machine-image {
+  width: 60%;
+  max-width: 480px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 20px rgba(0,0,0,0.28));
+  z-index: 20; /* keep behind strip and drop */
+  transition: transform 0.3s ease;
+  margin-top: 20px; /* Add space from pipette */
+}
+
+.machine-image:hover {
+  transform: scale(1.04);
+}
+
+/* Compact Test Strip - Below Machine */
+.test-strip-compact {
+  width: 220px;
+  height: 32px;
+  background: linear-gradient(to bottom, #ffffff, #f8fafc);
+  border: 2px solid #cbd5e1;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 6px 8px;
+  /* place test strip below the machine center */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 15px; /* Position visible below the machine */
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.9);
+  border-radius: 8px;
+  z-index: 35; /* above machine image but below drop */
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.test-strip-compact:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.8);
+}
+
+/* Compact Test Pads */
+.pad-compact {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #e2e8f0;
+  background-color: #f0e68c; /* Light yellow - initial color */
+  border-radius: 4px;
+  /* IMPORTANT: Smooth color transition like the HTML example */
+  transition: background-color 2s ease-in-out;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#pad-2 {
+  background-color: #add8e6; /* Light blue - initial color */
+  transition: background-color 2s ease-in-out;
+}
+
+#pad-3 {
+  background-color: #f0f0f0; /* Light gray - initial color */
+  transition: background-color 2s ease-in-out;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .simulation-container-with-machine {
+    gap: 5px;
+   padding: 20px 12px 70px 12px;
+  }
+
+  .pipette-section {
+   top: 10px;
+   left: 12%;
+  }
+  
+  .pipette-section::before {
+    width: 24px;
+    height: 30px;
+  }
+
+  .machine-image {
+    width: 75%;
+    max-width: 520px;
+  }
+
+  .pipette-tip-compact {
+    width: 12px;
+    height: 40px;
+  }
+
+  .test-strip-compact {
+    width: 180px;
+    height: 28px;
+    bottom: 12px;
+  }
+
+  .pad-compact {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .machine-image {
+    width: 65%;
+    max-width: 450px;
+  }
+  
+  .simulation-container-with-machine {
+    min-height: 420px;
+  }
+
+  .drop-compact {
+    width: 16px;
+    height: 16px;
+  }
+
+  @keyframes fallStraightDown {
+    0% {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(-50%, 220px);
+      opacity: 0;
+    }
+  }
+  
+  .drop-compact.drop-falling {
+    animation: fallStraightDown 2.5s ease-in forwards;
+    opacity: 1; /* ensure visible on tablet */
+  }
+}
+
+@media (max-width: 768px) {
+  .simulation-container-with-machine {
+    flex-direction: column;
+    gap: 5px;
+    padding: 20px 10px 60px 10px;
+  }
+
+  .pipette-section {
+    order: 1;
+    top: 10px;
+    left: 15%;
+  }
+  
+  .pipette-section::before {
+    width: 22px;
+    height: 28px;
+  }
+
+  .machine-section {
+    order: 2;
+    flex: 1;
+  }
+
+  .machine-image {
+    width: 65%;
+    max-width: 350px;
+  }
+
+  .pipette-tip-compact {
+    width: 11px;
+    height: 35px;
+  }
+
+  .test-strip-compact {
+    width: 160px;
+    height: 26px;
+    bottom: 10px;
+  }
+
+  .pad-compact {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .simulation-container-with-machine {
+    min-height: 380px;
+  }
+
+  .drop-compact {
+    width: 15px;
+    height: 15px;
+  }
+
+  /* Straight down animation for mobile */
+  @keyframes fallStraightDown {
+    0% {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+    90% {
+      opacity: 1;
+    }
+    100% {
+      transform: translate(-50%, 200px);
+      opacity: 0;
+    }
+  }
+  
+  .drop-compact.drop-falling {
+    animation: fallStraightDown 2.5s ease-in forwards;
+    opacity: 1; /* ensure visible on mobile */
+  }
+}

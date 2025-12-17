@@ -1,12 +1,13 @@
 
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useDarkMode } from './DarkMode';
+import { createPortal } from 'react-dom';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
 
 function Header() {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const location = useLocation();
-    const { isDarkMode, toggleDarkMode } = useDarkMode();
+    const { isDarkMode, toggleTheme } = useGlobalTheme();
 
     const toggleMenu = () => {
         setIsMenuOpen(!isMenuOpen);
@@ -88,13 +89,22 @@ function Header() {
                     >
                         Contact
                     </a>
+                    <a
+                        href="/blog"   
+                        className={`font-semibold relative transition-colors ${location.pathname === '/blog'
+                            ? 'text-transparent bg-gradient-to-r from-sky-300 to-violet-400 bg-clip-text after:absolute after:left-0 after:-bottom-2 after:h-0.5 after:w-10 after:bg-gradient-to-r after:from-sky-300 after:to-violet-400 after:rounded-full'
+                            : 'text-neutral-900 dark:text-white/90 hover:text-neutral-700 dark:hover:text-white'
+                            }`}
+                    >
+                        News
+                    </a>
                 </nav>
 
                 {/* Desktop Action Buttons */}
                 <div className="hidden md:flex items-center ml-auto gap-4">
                     {/* Dark Mode Toggle Button */}
                     <button
-                        onClick={toggleDarkMode}
+                        onClick={toggleTheme}
                         className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200"
                         aria-label={isDarkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
                     >
@@ -123,29 +133,47 @@ function Header() {
                     aria-label="Toggle menu"
                     data-hamburger-button
                 >
-                    <span className={`w-6 h-0.5 bg-neutral-700 transition-all duration-300 ${isMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
-                    <span className={`w-6 h-0.5 bg-neutral-700 transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
-                    <span className={`w-6 h-0.5 bg-neutral-700 transition-all duration-300 ${isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
+                    <span className={`w-6 h-0.5 bg-neutral-700 dark:bg-white transition-all duration-300 ${isMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
+                    <span className={`w-6 h-0.5 bg-neutral-700 dark:bg-white transition-all duration-300 ${isMenuOpen ? 'opacity-0' : ''}`}></span>
+                    <span className={`w-6 h-0.5 bg-neutral-700 dark:bg-white transition-all duration-300 ${isMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
                 </button>
             </div>
 
-            {/* Mobile Menu Overlay */}
-            {isMenuOpen && (
-                <div
-                    className="md:hidden fixed inset-0 bg-transparent"
-                    style={{ zIndex: 2147483647 }}
-                    onClick={() => {
-                        setIsMenuOpen(false);
-                    }}
-                />
-            )}
+            {/* Mobile Menu Portal */}
+            {isMenuOpen && createPortal(
+                <>
+                    {/* Mobile Menu Overlay */}
+                    <div
+                        className="md:hidden fixed inset-0 bg-black/20 backdrop-blur-sm"
+                        style={{ 
+                            zIndex: 99999,
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0
+                        }}
+                        onClick={() => {
+                            setIsMenuOpen(false);
+                        }}
+                    />
 
-            {/* Mobile Menu */}
-            <div
-                className={`md:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gradient-to-r dark:from-gray-800 dark:to-gray-900 border-b-2 border-neutral-300 dark:border-gray-700 shadow-2xl transition-all duration-300 overflow-y-auto ${isMenuOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-full'}`}
-                style={{ zIndex: 2147483648 }}
-                data-mobile-menu
-            >
+                    {/* Mobile Menu */}
+                    <div
+                        className={`md:hidden fixed top-0 left-0 right-0 bg-white dark:bg-gradient-to-r dark:from-gray-800 dark:to-gray-900 border-b-2 border-neutral-300 dark:border-gray-700 shadow-2xl transition-all duration-300 overflow-y-auto ${isMenuOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-full'}`}
+                        style={{ 
+                            zIndex: 999999,
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            width: '100%',
+                            height: 'auto',
+                            maxHeight: '100vh',
+                            transform: isMenuOpen ? 'translateY(0)' : 'translateY(-100%)'
+                        }}
+                        data-mobile-menu
+                    >
                 <nav className="px-3 py-3 space-y-2">
                     <a
                         href="/"
@@ -183,27 +211,21 @@ function Header() {
                     >
                         Contact
                     </a>
-                    <div className="pt-3 border-t border-neutral-200 dark:border-gray-700">
+                    <div className="pt-3 border-t border-neutral-200 dark:border-gray-700 w-full">
                         {/* Mobile Dark Mode Toggle */}
                         <button
-                            onClick={toggleDarkMode}
+                            onClick={toggleTheme}
                             className="flex items-center justify-center gap-2 w-full mb-3 p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors duration-200"
                             aria-label={isDarkMode ? 'Chuyển sang chế độ sáng' : 'Chuyển sang chế độ tối'}
                         >
                             {isDarkMode ? (
-                                <>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-yellow-500">
-                                        <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
-                                    </svg>
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Chế độ sáng</span>
-                                </>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-yellow-500">
+                                    <path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.166a.75.75 0 00-1.06-1.06l-1.591 1.59a.75.75 0 101.06 1.061l1.591-1.59zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.834 18.894a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 10-1.061 1.06l1.59 1.591zM12 18a.75.75 0 01.75.75V21a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 18zM7.758 17.303a.75.75 0 00-1.061-1.06l-1.591 1.59a.75.75 0 001.06 1.061l1.591-1.59zM6 12a.75.75 0 01-.75.75H3a.75.75 0 010-1.5h2.25A.75.75 0 016 12zM6.697 7.757a.75.75 0 001.06-1.06l-1.59-1.591a.75.75 0 00-1.061 1.06l1.59 1.591z" />
+                                </svg>
                             ) : (
-                                <>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-gray-700">
-                                        <path fillRule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clipRule="evenodd" />
-                                    </svg>
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Chế độ tối</span>
-                                </>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-gray-700">
+                                    <path fillRule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-4.368 2.667-8.112 6.46-9.694a.75.75 0 01.818.162z" clipRule="evenodd" />
+                                </svg>
                             )}
                         </button>
                         
@@ -212,7 +234,10 @@ function Header() {
                         </a>
                     </div>
                 </nav>
-            </div>
+                    </div>
+                </>,
+                document.body
+            )}
         </header>
     )
 }

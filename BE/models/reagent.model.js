@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getVNTime } = require('../helpers/time.helper');
 
 const ReagentSchema = new mongoose.Schema({
     reagent_name: {
@@ -31,13 +32,43 @@ const ReagentSchema = new mongoose.Schema({
         required: true,
         default: 'mL'
     },
-    created_at: {
+    // Mảng lưu trữ các lô thuốc với hạn sử dụng khác nhau
+    batches: [{
+        lot_number: {
+            type: String,
+            required: true
+        },
+        quantity: {
+            type: Number,
+            required: true,
+            min: 0
+        },
+        expiration_date: {
+            type: Date,
+            required: true
+        },
+        supply_id: {
+            type: String,
+            required: true
+        },
+        storage_location: {
+            type: String,
+            required: false
+        },
+        received_date: {
+            type: Date,
+            required: true
+        }
+    }],
+    // Hạn sử dụng gần nhất (để dễ truy vấn)
+    nearest_expiration_date: {
         type: Date,
-        default: Date.now
-    }
+        required: false
+    },
+   
 }, {
-    timestamps: false,  
-    versionKey: false   
+    timestamps: { currentTime: getVNTime },
+    versionKey: false
 });
 
 module.exports = mongoose.model('Reagent', ReagentSchema, 'reagents');

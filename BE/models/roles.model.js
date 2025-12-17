@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getVNTime } = require('../helpers/time.helper');
 
 const roleSchema = new mongoose.Schema({
     role: {
@@ -18,10 +19,8 @@ const roleSchema = new mongoose.Schema({
         required: true
     }]
 }, {
-    timestamps: {
-        createdAt: 'created_at',
-        updatedAt: 'updated_at'
-    }
+    timestamps: { currentTime: getVNTime },
+    versionKey: false
 });
 
 const Role = mongoose.model('Role', roleSchema, 'roles');

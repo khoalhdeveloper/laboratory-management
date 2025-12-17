@@ -1,14 +1,24 @@
 
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CountUp from 'react-countup';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
+import { chatAPI } from '../Axios/Axios';
 
 
 
 function Home() {
+    const { isDarkMode: _isDarkMode } = useGlobalTheme();
     const [showBackToTop, setShowBackToTop] = useState(false);
     const [visibleElements, setVisibleElements] = useState<Set<string>>(new Set());
+    const [showChat, setShowChat] = useState(false);
+    const [messages, setMessages] = useState<Array<{ text: string; sender: 'user' | 'ai'; time: string }>>([]);
+    const [inputMessage, setInputMessage] = useState('');
+    const [_sessionId, setSessionId] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [hasWelcomed, setHasWelcomed] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -48,17 +58,109 @@ function Home() {
         };
     }, []);
 
-    // Kiểm tra token trong URL và chuyển đến trang reset password
+    // Check token in URL and navigate to reset password page
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const tokenFromUrl = urlParams.get('token');
         const emailFromUrl = urlParams.get('email');
         
         if (tokenFromUrl && emailFromUrl) {
-            // Chuyển đến trang reset-password với token và email trong URL
+            // Navigate to reset-password page with token and email in URL
             navigate('/reset-password', { replace: true });
         }
     }, [navigate]);
+
+    // Auto scroll to bottom when new message arrives
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    // Automatically send welcome message when opening chat for the first time
+    useEffect(() => {
+        if (showChat && !hasWelcomed && messages.length === 0) {
+            setHasWelcomed(true);
+            setIsLoading(true);
+            
+            const welcomeMessage = "Welcome to our laboratory management application! Please respond in a friendly and concise manner.";
+            
+            chatAPI.sendMessage({
+                text: welcomeMessage
+            })
+            .then((response) => {
+                if (response.data && response.data.reply) {
+                    const aiResponse = {
+                        text: response.data.reply.content,
+                        sender: 'ai' as const,
+                        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                    };
+                    setMessages(prev => [...prev, aiResponse]);
+                    
+                    if (response.data.reply.sessionId) {
+                        setSessionId(response.data.reply.sessionId);
+                    }
+                }
+            })
+            .catch((error: any) => {
+                console.error('Error sending welcome message:', error);
+                const errorResponse = {
+                    text: 'Sorry, an error occurred while sending the message. Please try again later.',
+                    sender: 'ai' as const,
+                    time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                };
+                setMessages(prev => [...prev, errorResponse]);
+            })
+            .finally(() => {
+                setIsLoading(false);
+            });
+        }
+    }, [showChat, hasWelcomed, messages.length]);
+
+    // Function to send message
+    const handleSendMessage = async () => {
+        if (!inputMessage.trim() || isLoading) return;
+
+        const userMessage = {
+            text: inputMessage,
+            sender: 'user' as const,
+            time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        const messageText = inputMessage;
+        setInputMessage('');
+        setIsLoading(true);
+
+        try {
+            // Send user's message directly - AI will detect language and respond accordingly
+            const response = await chatAPI.sendMessage({
+                text: messageText
+            });
+
+            if (response.data && response.data.reply) {
+                const aiResponse = {
+                    text: response.data.reply.content,
+                    sender: 'ai' as const,
+                    time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                };
+                setMessages(prev => [...prev, aiResponse]);
+                
+                // Save sessionId if available
+                if (response.data.reply.sessionId) {
+                    setSessionId(response.data.reply.sessionId);
+                }
+            }
+        } catch (error: any) {
+            console.error('Error sending message:', error);
+            const errorResponse = {
+                text: 'Sorry, an error occurred while sending the message. Please try again later.',
+                sender: 'ai' as const,
+                time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+            };
+            setMessages(prev => [...prev, errorResponse]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     return (
         <div className="bg-gradient-to-b from-sky-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -96,7 +198,7 @@ function Home() {
                 >
                     <img
                         src="https://mdfinstruments.vn/uploaded/Goc-tu-van/bac-si-xet-nghiem-hoc-nganh-gi-1.jpg"
-                        alt="Bác sĩ đang xét nghiệm trong phòng lab"
+                        alt="Doctor performing tests in laboratory"
                         loading="lazy"
                         className="rounded-2xl w-full h-80 object-cover bg-neutral-100"
                     />
@@ -297,15 +399,15 @@ function Home() {
                     <form className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <input
                             className="rounded-lg bg-white/15 dark:bg-gray-600/30 border border-white/30 dark:border-gray-500/50 text-white placeholder-white/80 dark:placeholder-gray-300/80 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/60 dark:focus:ring-gray-400/60"
-                            placeholder="Your Name"
+                            placeholder="Your name"
                         />
                         <input
                             className="rounded-lg bg-white/15 dark:bg-gray-600/30 border border-white/30 dark:border-gray-500/50 text-white placeholder-white/80 dark:placeholder-gray-300/80 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/60 dark:focus:ring-gray-400/60"
-                            placeholder="Your Email"
+                            placeholder="Your email"
                         />
                         <input
                             className="rounded-lg bg-white/15 dark:bg-gray-600/30 border border-white/30 dark:border-gray-500/50 text-white placeholder-white/80 dark:placeholder-gray-300/80 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/60 dark:focus:ring-gray-400/60"
-                            placeholder="Phone Number"
+                            placeholder="Phone number"
                         />
                         <select
                             className="rounded-lg bg-white/15 dark:bg-gray-600/30 border border-white/30 dark:border-gray-500/50 text-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/60 dark:focus:ring-gray-400/60"
@@ -318,11 +420,11 @@ function Home() {
                         </select>
                         <textarea
                             className="rounded-lg bg-white/15 dark:bg-gray-600/30 border border-white/30 dark:border-gray-500/50 text-white placeholder-white/80 dark:placeholder-gray-300/80 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-white/60 dark:focus:ring-gray-400/60 md:col-span-2"
-                            placeholder="Messages"
+                            placeholder="Message"
                             rows={4}
                         />
                         <div className="md:col-span-2">
-                            <button className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-300 to-violet-400 text-white px-6 py-2 text-sm font-semibold shadow-sm hover:from-sky-400 hover:to-violet-500 transition-all">Send Message</button>
+                            <button className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-300 to-violet-400 text-white px-6 py-2 text-sm font-semibold shadow-sm hover:from-sky-400 hover:to-violet-500 transition-all">Send message</button>
                         </div>
                     </form>
                 </div>
@@ -332,7 +434,7 @@ function Home() {
                     className={`mt-10 transition-all duration-1000 ${visibleElements.has('news') ? 'animate__animated animate__fadeInUp' : 'opacity-0 translate-y-[50px]'}`}
                 >
                     <div className="flex items-center justify-between">
-                        <h3 className="text-2xl font-bold text-transparent bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text">News & Article</h3>
+                        <h3 className="text-2xl font-bold text-transparent bg-gradient-to-r from-blue-300 to-purple-400 bg-clip-text">News & Articles</h3>
                         <button className="rounded-full bg-gradient-to-r from-sky-300 to-violet-400 text-white px-4 py-1.5 text-sm hover:from-sky-400 hover:to-violet-500">View all</button>
                     </div>
                     <div className="mt-5 grid md:grid-cols-3 gap-5">
@@ -353,17 +455,158 @@ function Home() {
                 </div>
             </section>
 
-            {/* Back to Top Button */}
-            {showBackToTop && (
+            {/* Chat AI Button & Back to Top Button */}
+            <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
+                {/* Chat AI Button */}
                 <button
-                    onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                    className="fixed bottom-6 right-6 w-12 h-12 rounded-full bg-gradient-to-r from-sky-300 to-violet-400 text-white shadow-lg hover:from-sky-400 hover:to-violet-500 transition-all duration-300 z-50 flex items-center justify-center"
-                    aria-label="Back to top"
+                    onClick={() => setShowChat(!showChat)}
+                    className="w-12 h-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group relative overflow-hidden cursor-pointer"
+                    aria-label="Chat with Lab AI"
+                    title="Chat with Lab AI"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                        <path d="M12 2l8 8h-5v10h-6V10H4l8-8z" />
-                    </svg>
+                    {/* Chatbot Icon - Chatbot image */}
+                    <img 
+                        src="/chatbot-icon.jpg" 
+                        alt="Lab AI" 
+                        className="w-full h-full object-cover rounded-full"
+                    />
+                    {/* AI Badge */}
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-violet-400 to-pink-400 rounded-full flex items-center justify-center text-xs font-bold animate-pulse">
+                        AI
+                    </span>
                 </button>
+
+                {/* Back to Top Button */}
+                {showBackToTop && (
+                    <button
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        className="w-12 h-12 rounded-full bg-gradient-to-r from-sky-300 to-violet-400 text-white shadow-lg hover:from-sky-400 hover:to-violet-500 transition-all duration-300 flex items-center justify-center"
+                        aria-label="Back to top"
+                        title="Back to top"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+                            <path d="M12 2l8 8h-5v10h-6V10H4l8-8z" />
+                        </svg>
+                    </button>
+                )}
+            </div>
+
+            {/* Chat Window */}
+            {showChat && (
+                <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 z-50 flex flex-col">
+                    {/* Chat Header */}
+                    <div className="bg-gradient-to-r from-sky-300 to-violet-400 dark:from-gray-700 dark:to-gray-600 text-white p-4 rounded-t-2xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <img 
+                                src="/chatbot-icon.jpg" 
+                                alt="Lab AI" 
+                                className="w-10 h-10 rounded-full object-cover border-2 border-white"
+                            />
+                            <div>
+                                <h3 className="font-bold text-lg">Lab AI</h3>
+                                <p className="text-xs opacity-90">Online</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                setShowChat(false);
+                                // Reset when closing chat so reopening will send welcome message
+                                setTimeout(() => {
+                                    setHasWelcomed(false);
+                                    setMessages([]);
+                                }, 300);
+                            }}
+                            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors cursor-pointer"
+                            aria-label="Close chat"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                            </svg>
+                        </button>
+                    </div>
+
+                    {/* Messages Area */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-900">
+                        {messages.length === 0 && !isLoading ? (
+                            <div className="text-center text-gray-500 dark:text-gray-400 py-8">
+                                <p className="text-sm">Loading...</p>
+                            </div>
+                        ) : (
+                            messages.map((msg, idx) => (
+                                <div
+                                    key={idx}
+                                    className={`flex items-end gap-2 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                                >
+                                    {msg.sender === 'ai' && (
+                                        <img 
+                                            src="/chatbot-icon.jpg" 
+                                            alt="Lab AI" 
+                                            className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                        />
+                                    )}
+                                    <div
+                                        className={`max-w-[75%] rounded-2xl px-4 py-2 ${
+                                            msg.sender === 'user'
+                                                ? 'bg-gradient-to-r from-sky-300 to-violet-400 text-white'
+                                                : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-600'
+                                        }`}
+                                    >
+                                        <p className="text-sm">{msg.text}</p>
+                                        <p className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'}`}>
+                                            {msg.time}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                        {/* Typing Indicator */}
+                        {isLoading && (
+                            <div className="flex items-end gap-2 justify-start">
+                                <img 
+                                    src="/chatbot-icon.jpg" 
+                                    alt="Lab AI" 
+                                    className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                />
+                                <div className="bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-gray-600 rounded-2xl px-4 py-2">
+                                    <div className="flex gap-1">
+                                        <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                                        <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                                        <span className="w-2 h-2 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Input Area */}
+                    <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-2xl">
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={inputMessage}
+                                onChange={(e) => setInputMessage(e.target.value)}
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter' && inputMessage.trim()) {
+                                        handleSendMessage();
+                                    }
+                                }}
+                                placeholder="Type a message..."
+                                className="flex-1 px-4 py-2 rounded-full border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent"
+                            />
+                            <button
+                                onClick={handleSendMessage}
+                                disabled={!inputMessage.trim() || isLoading}
+                                className="w-10 h-10 rounded-full bg-gradient-to-r from-sky-300 to-violet-400 text-white flex items-center justify-center hover:from-sky-400 hover:to-violet-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                aria-label="Send message"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     )

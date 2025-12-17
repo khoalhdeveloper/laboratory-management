@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getVNTime } = require('../helpers/time.helper');
 
 const instrumentSchema = new mongoose.Schema(
   {
@@ -10,27 +11,50 @@ const instrumentSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    instrument_code: String,
-    description: String,
+    type: {
+      type: String,
+      required: true,
+    },
+    category: {
+      type: String,
+      required: true,
+    },
+    manufacturer: {
+      type: String,
+      required: true,
+    },
+    model: {
+      type: String,
+      required: true,
+    },
+    serial_number: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+    room: {
+      type: String,
+      required: true,
+    },
     status: {
       type: String,
-      enum: ['Ready', 'Maintenance', 'Inactive'],
-      default: 'Ready',
+      enum: ['Available', 'In Use', 'Maintenance', 'Out of Service'],
+      default: 'Available',
+    },
+    last_check: {
+      type: Date,
+      default: null,
+    },
+    next_check: {
+      type: Date,
+      default: null,
     },
   },
   {
-    timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    timestamps: { currentTime: getVNTime },
     versionKey: false,
   }
 );
 
-// 🧠 Tự động sinh mã ID dạng INS-001, INS-002...
-instrumentSchema.pre('save', async function (next) {
-  if (this.instrument_id) return next();
-
-  const count = await mongoose.model('Instrument').countDocuments();
-  this.instrument_id = `INS-${String(count + 1).padStart(3, '0')}`;
-  next();
-});
 
 module.exports = mongoose.model('Instrument', instrumentSchema, 'instruments');

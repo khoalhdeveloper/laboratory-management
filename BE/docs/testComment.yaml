@@ -1,0 +1,257 @@
+tags:
+  - name: Test Comments
+    description: API quản lý bình luận cho kết quả xét nghiệm
+
+paths:
+  /api/test-comments/getCommentsByOrderCode/{order_code}:
+    get:
+      summary: Lấy tất cả comment theo order_code
+      tags: [Test Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Mã đơn hàng xét nghiệm (order_code)
+      responses:
+        200:
+          description: Lấy danh sách comment thành công (có thể rỗng)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      order_code:
+                        type: string
+                      comments_count:
+                        type: integer
+                      final_comments_count:
+                        type: integer
+                      final_comments:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/TestComment"
+                      all_comments:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/TestComment"
+        404:
+          description: Không tìm thấy test result
+        500:
+          description: Lỗi server
+
+  /api/test-comments/addComment/{order_code}:
+    post:
+      summary: Thêm comment cho test result theo order_code
+      tags: [Test Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  description: Nội dung bình luận
+      responses:
+        201:
+          description: Thêm comment thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      order_code:
+                        type: string
+                      new_comment:
+                        $ref: "#/components/schemas/TestComment"
+                      total_comments:
+                        type: integer
+        400:
+          description: Thiếu nội dung hoặc thiếu User ID trong token
+        404:
+          description: Không tìm thấy test result
+        500:
+          description: Lỗi server
+
+  /api/test-comments/updateComment/{comment_id}:
+    put:
+      summary: Cập nhật nội dung comment theo comment_id
+      tags: [Test Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: comment_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+      responses:
+        200:
+          description: Cập nhật comment thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/TestComment"
+        400:
+          description: Thiếu nội dung hoặc thiếu User ID trong token
+        403:
+          description: Chỉ được phép cập nhật comment của chính mình
+        404:
+          description: Không tìm thấy comment
+        500:
+          description: Lỗi server
+
+  /api/test-comments/markFinalComment/{order_code}/{comment_id}:
+    put:
+      summary: Đánh dấu/Hủy đánh dấu comment là final
+      description: Đánh dấu comment là final sẽ tự động bỏ final các comment khác của cùng test result.
+      tags: [Test Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: comment_id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Cập nhật trạng thái final cho comment thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      comment_id:
+                        type: string
+                      is_final:
+                        type: boolean
+                      content:
+                        type: string
+                      doctor_name:
+                        type: string
+        400:
+          description: Thiếu User ID trong token
+        404:
+          description: Không tìm thấy test order/test result/comment
+        500:
+          description: Lỗi server
+
+  /api/test-comments/deleteComment/{comment_id}:
+    delete:
+      summary: Xóa comment theo comment_id
+      tags: [Test Comments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: comment_id
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Xóa comment thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      deleted_comment_id:
+                        type: string
+        400:
+          description: Thiếu User ID trong token
+        403:
+          description: Chỉ được phép xóa comment của chính mình
+        404:
+          description: Không tìm thấy comment
+        500:
+          description: Lỗi server
+
+components:
+  schemas:
+    TestComment:
+      type: object
+      properties:
+        comment_id:
+          type: string
+        content:
+          type: string
+        doctor_name:
+          type: string
+        doctor_id:
+          type: string
+        is_final:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

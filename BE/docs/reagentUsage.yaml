@@ -1,0 +1,326 @@
+tags:
+  - name: Reagent Usage
+    description: API quản lý lịch sử sử dụng hóa chất
+
+paths:
+  /api/reagent-usage/use:
+    post:
+      summary: Ghi nhận sử dụng hóa chất (tổng quát)
+      description: Trừ tồn kho theo danh sách hóa chất sử dụng và lưu lịch sử sử dụng.
+      tags: [Reagent Usage]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reagents
+              properties:
+                reagents:
+                  type: array
+                  description: Danh sách hóa chất sử dụng
+                  items:
+                    type: object
+                    required: [reagent_name, quantity_used]
+                    properties:
+                      reagent_name:
+                        type: string
+                      quantity_used:
+                        type: number
+                used_for:
+                  type: string
+                  description: Mục đích sử dụng
+                procedure:
+                  type: string
+                  description: Quy trình (nếu có)
+                notes:
+                  type: string
+                  description: Ghi chú
+      responses:
+        200:
+          description: Cập nhật sử dụng hóa chất thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  usageRecords:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReagentUsage'
+        400:
+          description: Thiếu dữ liệu hoặc số lượng tồn không đủ
+        404:
+          description: Không tìm thấy hóa chất
+        500:
+          description: Lỗi server
+
+  /api/reagent-usage/use-for-instrument:
+    post:
+      summary: Ghi nhận sử dụng hóa chất cho thiết bị cụ thể
+      description: Trừ tồn kho theo danh sách hóa chất sử dụng cho một thiết bị.
+      tags: [Reagent Usage]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - instrument_id
+                - reagents
+              properties:
+                instrument_id:
+                  type: string
+                reagents:
+                  type: array
+                  items:
+                    type: object
+                    required: [reagent_name, quantity_used]
+                    properties:
+                      reagent_name:
+                        type: string
+                      quantity_used:
+                        type: number
+                used_for:
+                  type: string
+                procedure:
+                  type: string
+                notes:
+                  type: string
+      responses:
+        200:
+          description: Ghi nhận sử dụng hóa chất cho thiết bị thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  instrument:
+                    type: object
+                    properties:
+                      instrument_id:
+                        type: string
+                      name:
+                        type: string
+                  procedure:
+                    type: string
+                  usageRecords:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReagentUsage'
+        400:
+          description: Thiếu instrument_id hoặc thông tin sử dụng hóa chất
+        404:
+          description: Không tìm thấy thiết bị hoặc hóa chất
+        500:
+          description: Lỗi server
+
+  /api/reagent-usage/history:
+    get:
+      summary: Xem lịch sử sử dụng hóa chất (lọc và phân trang)
+      description: Lọc theo tên hóa chất, người dùng, vai trò, thiết bị, quy trình, mục đích và khoảng thời gian.
+      tags: [Reagent Usage]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: reagent_name
+          schema:
+            type: string
+          description: Lọc theo tên hóa chất
+        - in: query
+          name: used_by
+          schema:
+            type: string
+          description: Lọc theo người sử dụng
+        - in: query
+          name: role
+          schema:
+            type: string
+          description: Lọc theo vai trò
+        - in: query
+          name: instrument_id
+          schema:
+            type: string
+        - in: query
+          name: instrument_name
+          schema:
+            type: string
+        - in: query
+          name: procedure
+          schema:
+            type: string
+        - in: query
+          name: used_for
+          schema:
+            type: string
+        - in: query
+          name: from_date
+          schema:
+            type: string
+            format: date
+          description: Từ ngày (yyyy-mm-dd)
+        - in: query
+          name: to_date
+          schema:
+            type: string
+            format: date
+          description: Đến ngày (yyyy-mm-dd)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: Lấy lịch sử sử dụng thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  total:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReagentUsage'
+        500:
+          description: Lỗi server
+
+  /api/reagent-usage/historyByUsedFor/{used_for}:
+    get:
+      summary: Xem lịch sử sử dụng theo mục đích
+      tags: [Reagent Usage]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: used_for
+          required: true
+          schema:
+            type: string
+          description: Mục đích sử dụng cần tra cứu
+      responses:
+        200:
+          description: Lấy lịch sử theo mục đích thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReagentUsage'
+        400:
+          description: Thiếu tham số used_for
+        404:
+          description: Không có lịch sử cho mục đích này
+        500:
+          description: Lỗi server
+
+  /api/reagent-usage/historyByInstrument/{instrument_id}:
+    get:
+      summary: Xem lịch sử sử dụng theo thiết bị
+      tags: [Reagent Usage]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: instrument_id
+          required: true
+          schema:
+            type: string
+          description: Mã thiết bị
+      responses:
+        200:
+          description: Lấy lịch sử theo thiết bị thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  instrument_id:
+                    type: string
+                  stats:
+                    type: object
+                    properties:
+                      instrument_name:
+                        type: string
+                      totalQuantityUsed:
+                        type: number
+                      totalRecords:
+                        type: integer
+                      uniqueReagents:
+                        type: array
+                        items:
+                          type: string
+                      uniqueUsers:
+                        type: array
+                        items:
+                          type: string
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ReagentUsage'
+        400:
+          description: Thiếu instrument_id
+        404:
+          description: Không có lịch sử cho thiết bị này
+        500:
+          description: Lỗi server
+
+components:
+  schemas:
+    ReagentUsage:
+      type: object
+      properties:
+        _id:
+          type: string
+        reagent_name:
+          type: string
+        quantity_used:
+          type: number
+        used_by:
+          type: string
+        role:
+          type: string
+        used_for:
+          type: string
+        instrument_id:
+          type: string
+        instrument_name:
+          type: string
+        procedure:
+          type: string
+        notes:
+          type: string
+        used_at:
+          type: string
+          format: date-time

@@ -19,5 +19,16 @@ export default defineConfig({
         secure: false,
       }
     }
-  }
+  },
+  publicDir: 'public',
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    rollupOptions: {
+      external: [],
+      output: {
+        manualChunks: undefined,
+      },
+    },
+  },
 })

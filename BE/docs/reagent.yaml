@@ -1,0 +1,207 @@
+tags:
+  - name: Reagents
+    description: API quản lý hóa chất (Reagents)
+
+paths:
+  /api/reagents/getAllReagents:
+    get:
+      summary: Lấy danh sách tất cả reagents
+      tags: [Reagents]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Lấy danh sách reagents thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Reagent"
+        500:
+          description: Lỗi server khi lấy danh sách reagents
+
+  /api/reagents/searchReagentsByName/{name}:
+    get:
+      summary: Tìm kiếm reagents theo tên (không phân biệt hoa thường)
+      tags: [Reagents]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+          description: Tên (hoặc một phần tên) của reagent cần tìm
+      responses:
+        200:
+          description: Tìm kiếm reagents thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Reagent"
+        500:
+          description: Lỗi server khi tìm kiếm reagents
+
+  /api/reagents/createReagent:
+    post:
+      summary: Tạo reagent mới
+      tags: [Reagents]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reagent_name:
+                  type: string
+                  description: Tên hóa chất (bắt buộc, duy nhất theo nghiệp vụ)
+                catalog_number:
+                  type: string
+                manufacturer:
+                  type: string
+                cas_number:
+                  type: string
+                description:
+                  type: string
+                quantity_available:
+                  type: number
+                  description: Số lượng tồn (mặc định 0)
+                unit:
+                  type: string
+                  description: Đơn vị (mặc định mL)
+      responses:
+        201:
+          description: Tạo reagent thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Reagent"
+        400:
+          description: Reagent đã tồn tại hoặc dữ liệu không hợp lệ
+        500:
+          description: Lỗi server khi tạo reagent
+
+  /api/reagents/updateReagentByName/{name}:
+    put:
+      summary: Cập nhật reagent theo reagent_name
+      tags: [Reagents]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+          description: Tên reagent cần cập nhật
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Các trường cần cập nhật cho reagent
+      responses:
+        200:
+          description: Cập nhật reagent thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Reagent"
+        404:
+          description: Không tìm thấy reagent
+        500:
+          description: Lỗi server khi cập nhật reagent
+
+  /api/reagents/deleteReagentByName/{name}:
+    delete:
+      summary: Xóa reagent theo reagent_name
+      tags: [Reagents]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+          description: Tên reagent cần xóa
+      responses:
+        200:
+          description: Xóa reagent thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        404:
+          description: Không tìm thấy reagent
+        500:
+          description: Lỗi server khi xóa reagent
+
+components:
+  schemas:
+    Reagent:
+      type: object
+      properties:
+        _id:
+          type: string
+        reagent_name:
+          type: string
+        catalog_number:
+          type: string
+        manufacturer:
+          type: string
+        cas_number:
+          type: string
+        description:
+          type: string
+        quantity_available:
+          type: number
+        unit:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

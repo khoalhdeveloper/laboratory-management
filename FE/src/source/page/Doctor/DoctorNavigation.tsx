@@ -33,6 +33,12 @@ const navigation: NavigationItem[] = [
     description: 'System event monitoring'
   },
   {
+    name: 'My Schedule',
+    href: '/doctor/schedule',
+    icon: Calendar,
+    description: 'My work shifts'
+  },
+  {
     name: 'Laboratory Tests',
     href: '/doctor/tests',
     icon: Beaker,

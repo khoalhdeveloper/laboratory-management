@@ -1,117 +1,317 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Badge } from './ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { 
   Search, 
   RefreshCw, 
-  Download, 
-  Filter, 
-  Calendar,
-  User,
-  Clock,
   AlertCircle,
   Eye,
   ChevronLeft,
   ChevronRight,
   Loader2,
   X,
-  FileText,
-  TrendingUp,
   Activity,
-  Shield,
-  Database,
-  Settings,
-  Users,
-  TestTube,
-  MessageSquare,
-  CheckCircle,
-  AlertTriangle,
   Info,
-  XCircle
+  Plus,
+  Edit,
+  Trash2,
+  Check,
+  Power,
+  Lock,
+  LogIn,
+  LogOut,
+  Filter,
+  Calendar,
+  User,
+  Clock
 } from 'lucide-react';
+import { eventLogAPI, type EventLogItem } from '../Axios/Axios';
 
 interface EventLog {
   id: string;
-  eventId: string; // E_00001, E_00002, etc.
+  eventId: string;
   action: 'Create' | 'Update' | 'Delete' | 'Modify' | 'Add' | 'Complete' | 'Activate' | 'Lock' | 'Login' | 'Logout';
   eventLogMessage: string;
   operator: string;
   date: string;
   timestamp: string;
   status: 'Success' | 'Error' | 'Info' | 'Warning';
-  beforeChange?: string; // Nội dung trước khi thay đổi
-  afterChange?: string;  // Nội dung sau khi thay đổi
   category: 'Test Order' | 'Test Result' | 'Comment' | 'Review' | 'Instrument' | 'User' | 'System' | 'Authentication' | 'Security' | 'Data';
+  createdAt: string;
 }
 
-// Constants for better maintainability
-const ACTIONS = ['Create', 'Update', 'Delete', 'Modify', 'Add', 'Complete', 'Activate', 'Lock', 'Login', 'Logout'] as const;
-const CATEGORIES = ['Test Order', 'Test Result', 'Comment', 'Review', 'Instrument', 'User', 'System', 'Authentication', 'Security', 'Data'] as const;
-const STATUSES = ['Success', 'Error', 'Info', 'Warning'] as const;
+// Helper function to transform API data to UI format
+const transformEventLogData = (apiData: any): EventLog[] => {
+  const dataArray = Array.isArray(apiData) ? apiData : (apiData?.data ? apiData.data : []);
+  
+  return dataArray.map((item: EventLogItem) => {
+    // Extract action from message
+    const messageText = item.message.toLowerCase();
+    let action: EventLog['action'] = 'Create';
+    
+    if (messageText.includes('create') || messageText.includes('created')) {
+      action = 'Create';
+    } else if (messageText.includes('update') || messageText.includes('updated') || messageText.includes('modify') || messageText.includes('modified')) {
+      action = 'Update';
+    } else if (messageText.includes('delete') || messageText.includes('deleted') || messageText.includes('remove') || messageText.includes('removed')) {
+      action = 'Delete';
+    } else if (messageText.includes('add') || messageText.includes('added')) {
+      action = 'Add';
+    } else if (messageText.includes('complete') || messageText.includes('completed')) {
+      action = 'Complete';
+    } else if (messageText.includes('activate') || messageText.includes('activated')) {
+      action = 'Activate';
+    } else if (messageText.includes('lock') || messageText.includes('locked')) {
+      action = 'Lock';
+    } else if (messageText.includes('login') || messageText.includes('logged in')) {
+      action = 'Login';
+    } else if (messageText.includes('logout') || messageText.includes('logged out')) {
+      action = 'Logout';
+    }
+    
+    // Determine status based on message content
+    let status: EventLog['status'] = 'Info';
+    if (item.message.toLowerCase().includes('error') || item.message.toLowerCase().includes('failed')) {
+      status = 'Error';
+    } else if (item.message.toLowerCase().includes('success') || item.message.toLowerCase().includes('completed')) {
+      status = 'Success';
+    } else if (item.message.toLowerCase().includes('warning') || item.message.toLowerCase().includes('caution')) {
+      status = 'Warning';
+    }
+    
+    // Determine category based on role first, then message content
+    let category: EventLog['category'] = 'System';
+    const categoryMessage = item.message.toLowerCase();
+    
+    if (item.role === 'doctor') {
+      category = 'Test Order';
+    } else if (categoryMessage.includes('test order') || categoryMessage.includes('testorder') || categoryMessage.includes('order_code') || categoryMessage.includes('patient_name')) {
+      category = 'Test Order';
+    } else if (categoryMessage.includes('test result') || categoryMessage.includes('testresult') || categoryMessage.includes('wbc') || categoryMessage.includes('rbc') || categoryMessage.includes('hgb')) {
+      category = 'Test Result';
+    } else if (categoryMessage.includes('comment') || categoryMessage.includes('doctor_name')) {
+      category = 'Comment';
+    } else if (categoryMessage.includes('review') || categoryMessage.includes('final')) {
+      category = 'Review';
+    } else if (categoryMessage.includes('instrument') || categoryMessage.includes('equipment') || categoryMessage.includes('device')) {
+      category = 'Instrument';
+    } else if (categoryMessage.includes('user') || categoryMessage.includes('account') || categoryMessage.includes('profile') || categoryMessage.includes('password')) {
+      category = 'User';
+    } else if (categoryMessage.includes('login') || categoryMessage.includes('logout') || categoryMessage.includes('authentication')) {
+      category = 'Authentication';
+    } else if (categoryMessage.includes('reagent') || categoryMessage.includes('supply') || categoryMessage.includes('usage')) {
+      category = 'Data';
+    }
+    
+    const createdAt = new Date(item.createdAt);
+    
+    // Server stores time in UTC, browser automatically converts to local timezone
+    const dateStr = createdAt.toISOString().split('T')[0];
+    const timeStr = createdAt.toISOString().split('T')[1].split('.')[0];
+    
+    return {
+      id: item._id,
+      eventId: item.event_id,
+      action,
+      eventLogMessage: item.message,
+      operator: item.performedBy || 'System',
+      date: dateStr,
+      timestamp: timeStr,
+      status,
+      category,
+      createdAt: item.createdAt
+    };
+  });
+};
 
-// Category icons mapping
-const CATEGORY_ICONS = {
-  'Test Order': TestTube,
-  'Test Result': Activity,
-  'Comment': MessageSquare,
-  'Review': CheckCircle,
-  'Instrument': Settings,
-  'User': Users,
-  'System': Database,
-  'Authentication': Shield,
-  'Security': Shield,
-  'Data': Database
-} as const;
+const STATUSES = ['Create', 'Update', 'Delete'] as const;
+const OPERATORS = ['nurse', 'admin', 'doctor'] as const;
+const CATEGORIES = ['Test Order', 'Test Result', 'Instrument', 'User', 'System', 'Data'] as const;
 
-// Status icons mapping
 const STATUS_ICONS = {
-  'Success': CheckCircle,
-  'Error': XCircle,
-  'Info': Info,
-  'Warning': AlertTriangle
-} as const;
+  Create: Plus,
+  Update: Edit,
+  Delete: Trash2
+};
+
+// Memoized components for better performance
+const EventLogRow = memo(({ log, onViewDetails, getActionColor, getActionIcon, getCategoryColor, getStatusColor, getStatusIcon }: {
+  log: EventLog;
+  onViewDetails: (log: EventLog) => void;
+  getActionColor: (action: string) => string;
+  getActionIcon: (action: string) => React.ReactNode;
+  getCategoryColor: (category: string) => string;
+  getStatusColor: (status: string) => string;
+  getStatusIcon: (status: string) => React.ReactNode;
+}) => (
+  <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="text-sm font-mono text-gray-900 dark:text-white">
+        {log.eventId}
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="flex justify-start">
+        <span className={getActionColor(log.action)}>
+          {getActionIcon(log.action)}
+          {log.action}
+        </span>
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <div className="flex justify-start">
+        <span className={`inline-flex items-center justify-start px-3 py-1.5 text-xs font-bold rounded-full border-2 transition-all duration-300 hover:shadow-lg hover:scale-105 w-[110px] ${getCategoryColor(log.category)}`}>
+          {log.category}
+        </span>
+      </div>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap">
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(log.status)}`}>
+        {getStatusIcon(log.status)}
+        {log.status}
+      </span>
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+      {log.operator}
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+      {log.date}
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+      {log.timestamp}
+    </td>
+    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+      <button 
+        onClick={() => onViewDetails(log)}
+        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200 flex items-center"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onViewDetails(log);
+          }
+        }}
+        tabIndex={0}
+        aria-label={`View details for event ${log.eventId}`}
+      >
+        <Eye className="h-4 w-4 mr-1" />
+        View
+      </button>
+    </td>
+  </tr>
+));
+
+const EventLogCard = memo(({ log, onViewDetails, getActionColor, getActionIcon, getCategoryColor, getStatusColor, getStatusIcon }: {
+  log: EventLog;
+  onViewDetails: (log: EventLog) => void;
+  getActionColor: (action: string) => string;
+  getActionIcon: (action: string) => React.ReactNode;
+  getCategoryColor: (category: string) => string;
+  getStatusColor: (status: string) => string;
+  getStatusIcon: (status: string) => React.ReactNode;
+}) => (
+  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
+    <div className="flex items-start justify-between mb-2 sm:mb-3 gap-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+          <span className="text-xs sm:text-sm font-mono text-gray-900 dark:text-white font-semibold truncate max-w-[150px] sm:max-w-none">
+            {log.eventId}
+          </span>
+          <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium ${getStatusColor(log.status)}`}>
+            {getStatusIcon(log.status)}
+            {log.status}
+          </span>
+        </div>
+        <div className="flex items-center flex-wrap gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
+          <span className={getActionColor(log.action)}>
+            {getActionIcon(log.action)}
+            {log.action}
+          </span>
+          <span className={`inline-flex items-center justify-start px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-bold rounded-full border-2 transition-all duration-300 hover:shadow-lg hover:scale-105 w-[95px] sm:w-[110px] ${getCategoryColor(log.category)}`}>
+            {log.category}
+          </span>
+        </div>
+        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 sm:mb-2 space-y-0.5 sm:space-y-1">
+          <div className="flex items-center">
+            <User className="h-3 w-3 mr-1 flex-shrink-0" />
+            <span className="truncate">{log.operator}</span>
+          </div>
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <div className="flex items-center">
+              <Calendar className="h-3 w-3 mr-1 flex-shrink-0" />
+              <span className="text-xs">{log.date}</span>
+            </div>
+            <div className="flex items-center">
+              <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
+              <span className="text-xs">{log.timestamp}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button 
+        onClick={() => onViewDetails(log)}
+        className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 transition-colors duration-200 flex items-center flex-shrink-0"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onViewDetails(log);
+          }
+        }}
+        tabIndex={0}
+        aria-label={`View details for event ${log.eventId}`}
+      >
+        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" />
+        <span className="text-xs sm:text-sm">View</span>
+      </button>
+    </div>
+  </div>
+));
+
+const LoadingSpinner = memo(() => (
+  <div className="flex items-center justify-center py-12">
+    <div className="text-center">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+      <p className="text-gray-600 dark:text-gray-400">Loading event logs...</p>
+    </div>
+  </div>
+));
+
+const EmptyState = memo(({ filters, resetFilters }: { filters: any; resetFilters: () => void }) => (
+  <div className="text-center py-12">
+    <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No event logs found</h3>
+    <p className="text-gray-600 dark:text-gray-400 mb-4">
+      {filters.search || filters.status !== 'All Actions' || filters.operator !== 'All Operators' || filters.category !== 'All Categories'
+        ? 'Try adjusting your search or filters to see more results.'
+        : 'No event logs have been recorded yet.'
+      }
+    </p>
+    {(filters.search || filters.status !== 'All Actions' || filters.operator !== 'All Operators' || filters.category !== 'All Categories') && (
+      <button
+        onClick={resetFilters}
+        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200"
+      >
+        Clear Filters
+      </button>
+    )}
+  </div>
+));
 
 const AdminEventLog: React.FC = () => {
   const [eventLogs, setEventLogs] = useState<EventLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [selectedLog, setSelectedLog] = useState<EventLog | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showExportDropdown, setShowExportDropdown] = useState(false);
+
   const [filters, setFilters] = useState({
     search: '',
-    action: 'All Actions',
-    category: 'All Categories',
-    dateFrom: '',
-    dateTo: '',
-    status: 'All Status'
+    status: 'All Actions',
+    operator: 'All Operators',
+    category: 'All Categories'
   });
 
-  useEffect(() => {
-    loadEventLogs();
-  }, []);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (showExportDropdown) {
-        setShowExportDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showExportDropdown]);
-
+  // Load event logs with improved error handling
   const loadEventLogs = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) {
@@ -121,236 +321,211 @@ const AdminEventLog: React.FC = () => {
       }
       setError(null);
       
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await eventLogAPI.getAllLogs();
       
-      const mockEventLogs: EventLog[] = [
-        {
-          id: '1',
-          eventId: 'E_00001',
-          action: 'Create',
-          eventLogMessage: 'Event message used when a new test order is created.',
-          operator: 'Admin User',
-          date: '2024-01-15',
-          timestamp: '2024-01-15 14:32:15',
-          status: 'Success',
-          category: 'Test Order',
-          beforeChange: 'N/A - New record',
-          afterChange: 'Test Order #TO-2024-001 created for Patient ID: P001'
-        },
-        {
-          id: '2',
-          eventId: 'E_00002',
-          action: 'Update',
-          eventLogMessage: 'Event message used when a test order is updated.',
-          operator: 'Dr. Sarah Chen',
-          date: '2024-01-15',
-          timestamp: '2024-01-15 13:45:22',
-          status: 'Info',
-          category: 'Test Order',
-          beforeChange: 'Priority: Normal, Status: Pending',
-          afterChange: 'Priority: Urgent, Status: In Progress'
-        },
-        {
-          id: '3',
-          eventId: 'E_00003',
-          action: 'Delete',
-          eventLogMessage: 'Event message used when a test order is deleted.',
-          operator: 'Dr. Michael Johnson',
-          date: '2024-01-15',
-          timestamp: '2024-01-15 12:18:30',
-          status: 'Warning',
-          category: 'Test Order',
-          beforeChange: 'Test Order #TO-2024-002 - Blood Test Panel',
-          afterChange: 'N/A - Record deleted'
-        },
-        {
-          id: '4',
-          eventId: 'E_00004',
-          action: 'Modify',
-          eventLogMessage: 'Event message used when a test result is modified.',
-          operator: 'Lab Tech. Anna Wilson',
-          date: '2024-01-15',
-          timestamp: '2024-01-15 11:22:45',
-          status: 'Success',
-          category: 'Test Result',
-          beforeChange: 'Glucose: 95 mg/dL, Cholesterol: 180 mg/dL',
-          afterChange: 'Glucose: 98 mg/dL, Cholesterol: 185 mg/dL'
-        },
-        {
-          id: '5',
-          eventId: 'E_00005',
-          action: 'Add',
-          eventLogMessage: 'Event message used when new comment of test result is added.',
-          operator: 'Dr. Emily Rodriguez',
-          date: '2024-01-15',
-          timestamp: '2024-01-15 10:15:12',
-          status: 'Info',
-          category: 'Comment',
-          beforeChange: 'No comments',
-          afterChange: 'Comment added: "Patient should follow up in 2 weeks for retest"'
-        },
-        {
-          id: '6',
-          eventId: 'E_00006',
-          action: 'Modify',
-          eventLogMessage: 'Event message used when comment of test result is modified.',
-          operator: 'Dr. Emily Rodriguez',
-          date: '2024-01-15',
-          timestamp: '2024-01-15 09:30:18',
-          status: 'Info',
-          category: 'Comment',
-          beforeChange: 'Comment: "Patient should follow up in 2 weeks"',
-          afterChange: 'Comment: "Patient should follow up in 1 week due to elevated levels"'
-        },
-        {
-          id: '7',
-          eventId: 'E_00007',
-          action: 'Delete',
-          eventLogMessage: 'Event message used when comment of test result is deleted.',
-          operator: 'Dr. Robert Kim',
-          date: '2024-01-14',
-          timestamp: '2024-01-14 16:45:33',
-          status: 'Warning',
-          category: 'Comment',
-          beforeChange: 'Comment: "Previous test results were inconclusive"',
-          afterChange: 'N/A - Comment deleted'
-        },
-        {
-          id: '8',
-          eventId: 'E_00008',
-          action: 'Complete',
-          eventLogMessage: 'Event message used when completed review.',
-          operator: 'Dr. Lisa Thompson',
-          date: '2024-01-14',
-          timestamp: '2024-01-14 15:20:41',
-          status: 'Success',
-          category: 'Review',
-          beforeChange: 'Review Status: Pending',
-          afterChange: 'Review Status: Completed by Dr. Lisa Thompson'
-        },
-        {
-          id: '9',
-          eventId: 'E_00009',
-          action: 'Activate',
-          eventLogMessage: 'Event message used when activate or deactivate instrument.',
-          operator: 'Lab Manager John Davis',
-          date: '2024-01-14',
-          timestamp: '2024-01-14 14:10:55',
-          status: 'Success',
-          category: 'Instrument',
-          beforeChange: 'Instrument XR-2000: Status - Inactive',
-          afterChange: 'Instrument XR-2000: Status - Active'
-        },
-        {
-          id: '10',
-          eventId: 'E_00010',
-          action: 'Lock',
-          eventLogMessage: 'Event message used when lock or unlock a user.',
-          operator: 'System Administrator',
-          date: '2024-01-14',
-          timestamp: '2024-01-14 13:05:27',
-          status: 'Warning',
-          category: 'User',
-          beforeChange: 'User account: john.doe@lab.com - Status: Active',
-          afterChange: 'User account: john.doe@lab.com - Status: Locked'
-        }
-      ];
+      // Handle API response structure: { total: number, data: EventLog[] }
+      let eventLogData = response.data.data || [];
       
-      setEventLogs(mockEventLogs);
-    } catch (err) {
-      setError('Failed to load event logs. Please try again.');
-      console.error('Error loading event logs:', err);
+      const transformedData = transformEventLogData(eventLogData);
+      setEventLogs(transformedData);
+    } catch (err: any) {
+      // Enhanced error handling with specific messages
+      const errorMessages = {
+        401: 'Unauthorized. Please log in again.',
+        403: 'Access denied. You do not have permission to view event logs.',
+        404: 'Event logs not found. Please try again later.',
+        429: 'Too many requests. Please wait a moment and try again.',
+        500: 'Server error. Please try again later.',
+        503: 'Service temporarily unavailable. Please try again later.'
+      };
+      
+      const status = err.response?.status;
+      const message = errorMessages[status as keyof typeof errorMessages] || 
+                    (err.message || 'Failed to load event logs. Please try again.');
+      
+      setError(message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  // Filter event logs with useMemo for performance
-  const filteredLogs = useMemo(() => {
-    return eventLogs.filter(log => {
-      const matchesSearch = log.eventLogMessage.toLowerCase().includes(filters.search.toLowerCase()) ||
-                           log.operator.toLowerCase().includes(filters.search.toLowerCase()) ||
-                           log.eventId.toLowerCase().includes(filters.search.toLowerCase());
-      const matchesAction = filters.action === 'All Actions' || log.action === filters.action;
-      const matchesCategory = filters.category === 'All Categories' || log.category === filters.category;
-      const matchesStatus = filters.status === 'All Status' || log.status === filters.status;
-      
-      // Date filtering logic
-      let matchesDate = true;
-      if (filters.dateFrom && filters.dateTo) {
-        const logDate = new Date(log.date);
-        const fromDate = new Date(filters.dateFrom);
-        const toDate = new Date(filters.dateTo);
-        matchesDate = logDate >= fromDate && logDate <= toDate;
-      } else if (filters.dateFrom) {
-        const logDate = new Date(log.date);
-        const fromDate = new Date(filters.dateFrom);
-        matchesDate = logDate >= fromDate;
-      } else if (filters.dateTo) {
-        const logDate = new Date(log.date);
-        const toDate = new Date(filters.dateTo);
-        matchesDate = logDate <= toDate;
-      }
-      
-      return matchesSearch && matchesAction && matchesCategory && matchesStatus && matchesDate;
-    });
-  }, [eventLogs, filters]);
+  useEffect(() => {
+    loadEventLogs();
+  }, [loadEventLogs]);
 
-  // Pagination logic
+  // Keyboard shortcut for search (Ctrl/Cmd + K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.getElementById('search-input') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Debounced search to improve performance and make searching easier
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(filters.search);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [filters.search]);
+
+
+  // Filter and sort event logs with comprehensive search
+  const filteredLogs = useMemo(() => {
+    let filtered = eventLogs;
+
+    // Search filter with debounced search - search in all visible table columns
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      filtered = filtered.filter(log => 
+        log.eventId.toLowerCase().includes(searchLower) ||
+        log.action.toLowerCase().includes(searchLower) ||
+        log.category.toLowerCase().includes(searchLower) ||
+        log.operator.toLowerCase().includes(searchLower) ||
+        log.date.toLowerCase().includes(searchLower) ||
+        log.timestamp.toLowerCase().includes(searchLower) ||
+        log.status.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Action filter (using the status filter UI)
+    if (filters.status !== 'All Actions') {
+      filtered = filtered.filter(log => log.action === filters.status);
+    }
+
+    // Operator filter
+    if (filters.operator !== 'All Operators') {
+      filtered = filtered.filter(log => log.operator.toLowerCase() === filters.operator.toLowerCase());
+    }
+
+    // Category filter
+    if (filters.category !== 'All Categories') {
+      filtered = filtered.filter(log => log.category === filters.category);
+    }
+
+    // Sort by createdAt (newest first)
+    return filtered.sort((a, b) => {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [eventLogs, filters.status, filters.operator, filters.category, debouncedSearch]);
+
+  // Pagination
   const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedLogs = filteredLogs.slice(startIndex, startIndex + itemsPerPage);
 
-  // Get status badge class with icons
-  const getStatusBadgeClass = (status: string) => {
-    const baseClass = 'inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full transition-all duration-200';
+  // Handle filter changes
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  }, []);
+
+  // Get status color with softer, less bright styling
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'Success':
-        return `${baseClass} bg-green-100 text-green-800 hover:bg-green-200`;
+        return 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-300 border border-green-200 dark:border-green-800';
       case 'Error':
-        return `${baseClass} bg-red-100 text-red-800 hover:bg-red-200`;
-      case 'Info':
-        return `${baseClass} bg-blue-100 text-blue-800 hover:bg-blue-200`;
+        return 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300 border border-red-200 dark:border-red-800';
       case 'Warning':
-        return `${baseClass} bg-yellow-100 text-yellow-800 hover:bg-yellow-200`;
+        return 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800';
+      case 'Info':
+        return 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border border-blue-200 dark:border-blue-800';
       default:
-        return `${baseClass} bg-gray-100 text-gray-800 dark:text-gray-200 hover:bg-gray-200`;
+        return 'bg-gray-50 text-gray-700 dark:bg-gray-900/20 dark:text-gray-300 border border-gray-200 dark:border-gray-800';
     }
   };
 
-  // Get action color with enhanced styling
-  const getActionColor = (action: string) => {
-    const baseClass = 'inline-flex items-center px-3 py-1 text-xs font-medium rounded-full border transition-all duration-200 hover:shadow-sm';
+  // Get action icon
+  const getActionIcon = (action: string) => {
     switch (action) {
       case 'Create':
       case 'Add':
-        return `${baseClass} text-green-700 bg-green-50 border-green-200 hover:bg-green-100`;
+        return <Plus className="h-3 w-3 mr-1" />;
       case 'Update':
       case 'Modify':
-        return `${baseClass} text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100`;
+        return <Edit className="h-3 w-3 mr-1" />;
       case 'Delete':
-        return `${baseClass} text-red-700 bg-red-50 border-red-200 hover:bg-red-100`;
+        return <Trash2 className="h-3 w-3 mr-1" />;
       case 'Complete':
-        return `${baseClass} text-purple-700 bg-purple-50 border-purple-200 hover:bg-purple-100`;
+        return <Check className="h-3 w-3 mr-1" />;
       case 'Activate':
-        return `${baseClass} text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100`;
+        return <Power className="h-3 w-3 mr-1" />;
       case 'Lock':
-        return `${baseClass} text-orange-700 bg-orange-50 border-orange-200 hover:bg-orange-100`;
+        return <Lock className="h-3 w-3 mr-1" />;
       case 'Login':
-        return `${baseClass} text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100`;
+        return <LogIn className="h-3 w-3 mr-1" />;
       case 'Logout':
-        return `${baseClass} text-gray-700 dark:text-gray-300 bg-gray-50 border-gray-200 dark:border-gray-600 hover:bg-gray-100`;
+        return <LogOut className="h-3 w-3 mr-1" />;
       default:
-        return `${baseClass} text-gray-700 dark:text-gray-300 bg-gray-50 border-gray-200 dark:border-gray-600 hover:bg-gray-100`;
+        return <Activity className="h-3 w-3 mr-1" />;
     }
   };
 
-  // Get category icon
-  const getCategoryIcon = (category: string) => {
-    const IconComponent = CATEGORY_ICONS[category as keyof typeof CATEGORY_ICONS] || Database;
-    return <IconComponent className="h-3 w-3 mr-1" />;
+  // Get action color with softer, less bright styling
+  const getActionColor = (action: string) => {
+    const baseClass = 'inline-flex items-center justify-start px-3 py-1.5 text-xs font-bold rounded-full border transition-all duration-300 hover:shadow-md hover:scale-105 w-[85px]';
+    
+    switch (action) {
+      case 'Create':
+      case 'Add':
+        return `${baseClass} text-white bg-gradient-to-r from-green-600 to-green-700 border-green-500 hover:from-green-700 hover:to-green-800 shadow-green-500/20 shadow-sm`;
+      case 'Update':
+      case 'Modify':
+        return `${baseClass} text-white bg-gradient-to-r from-blue-600 to-blue-700 border-blue-500 hover:from-blue-700 hover:to-blue-800 shadow-blue-500/20 shadow-sm`;
+      case 'Delete':
+        return `${baseClass} text-white bg-gradient-to-r from-red-600 to-red-700 border-red-500 hover:from-red-700 hover:to-red-800 shadow-red-500/20 shadow-sm`;
+      case 'Complete':
+        return `${baseClass} text-white bg-gradient-to-r from-purple-600 to-purple-700 border-purple-500 hover:from-purple-700 hover:to-purple-800 shadow-purple-500/20 shadow-sm`;
+      case 'Activate':
+        return `${baseClass} text-white bg-gradient-to-r from-emerald-600 to-emerald-700 border-emerald-500 hover:from-emerald-700 hover:to-emerald-800 shadow-emerald-500/20 shadow-sm`;
+      case 'Lock':
+        return `${baseClass} text-white bg-gradient-to-r from-orange-600 to-orange-700 border-orange-500 hover:from-orange-700 hover:to-orange-800 shadow-orange-500/20 shadow-sm`;
+      case 'Login':
+        return `${baseClass} text-white bg-gradient-to-r from-indigo-600 to-indigo-700 border-indigo-500 hover:from-indigo-700 hover:to-indigo-800 shadow-indigo-500/20 shadow-sm`;
+      case 'Logout':
+        return `${baseClass} text-white bg-gradient-to-r from-gray-600 to-gray-700 border-gray-500 hover:from-gray-700 hover:to-gray-800 shadow-gray-500/20 shadow-sm`;
+      default:
+        return `${baseClass} text-white bg-gradient-to-r from-gray-600 to-gray-700 border-gray-500 hover:from-gray-700 hover:to-gray-800 shadow-gray-500/20 shadow-sm`;
+    }
+  };
+
+  // Get category color with softer, less bright styling
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'Test Order':
+        return 'text-white bg-gradient-to-r from-amber-600 to-orange-700 border-amber-500 hover:from-amber-700 hover:to-orange-800 shadow-amber-500/20 shadow-sm';
+      case 'Test Result':
+        return 'text-white bg-gradient-to-r from-purple-600 to-purple-700 border-purple-500 hover:from-purple-700 hover:to-purple-800 shadow-purple-500/20 shadow-sm';
+      case 'Comment':
+        return 'text-white bg-gradient-to-r from-orange-600 to-red-600 border-orange-500 hover:from-orange-700 hover:to-red-700 shadow-orange-500/20 shadow-sm';
+      case 'Review':
+        return 'text-white bg-gradient-to-r from-indigo-600 to-blue-700 border-indigo-500 hover:from-indigo-700 hover:to-blue-800 shadow-indigo-500/20 shadow-sm';
+      case 'Instrument':
+        return 'text-white bg-gradient-to-r from-cyan-600 to-teal-700 border-cyan-500 hover:from-cyan-700 hover:to-teal-800 shadow-cyan-500/20 shadow-sm';
+      case 'User':
+        return 'text-white bg-gradient-to-r from-emerald-600 to-green-700 border-emerald-500 hover:from-emerald-700 hover:to-green-800 shadow-emerald-500/20 shadow-sm';
+      case 'Authentication':
+        return 'text-white bg-gradient-to-r from-violet-600 to-purple-700 border-violet-500 hover:from-violet-700 hover:to-purple-800 shadow-violet-500/20 shadow-sm';
+      case 'Data':
+        return 'text-white bg-gradient-to-r from-slate-600 to-gray-700 border-slate-500 hover:from-slate-700 hover:to-gray-800 shadow-slate-500/20 shadow-sm';
+      case 'System':
+        return 'text-white bg-gradient-to-r from-gray-600 to-slate-700 border-gray-500 hover:from-gray-700 hover:to-slate-800 shadow-gray-500/20 shadow-sm';
+      default:
+        return 'text-white bg-gradient-to-r from-gray-600 to-slate-700 border-gray-500 hover:from-gray-700 hover:to-slate-800 shadow-gray-500/20 shadow-sm';
+    }
   };
 
   // Get status icon
@@ -359,621 +534,522 @@ const AdminEventLog: React.FC = () => {
     return <IconComponent className="h-3 w-3 mr-1" />;
   };
 
-  const handleExport = useCallback(async (format: 'csv' | 'pdf') => {
-    try {
-      setExporting(true);
-      setShowExportDropdown(false);
-      
-      // Simulate export delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // TODO: Implement actual export functionality
-      console.log(`Exporting to ${format}...`);
-      
-      // For now, show success message
-      alert(`Export to ${format.toUpperCase()} completed successfully!`);
-    } catch (err) {
-      console.error('Export error:', err);
-      alert(`Failed to export to ${format.toUpperCase()}. Please try again.`);
-    } finally {
-      setExporting(false);
-    }
-  }, []);
 
   const handleRefresh = useCallback(() => {
     loadEventLogs(true);
   }, [loadEventLogs]);
 
-  const handleFilterChange = useCallback((key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-    setCurrentPage(1); // Reset to first page when filters change
+  const handleViewDetails = useCallback((log: EventLog) => {
+    setSelectedLog(log);
+    setShowDetailModal(true);
+  }, []);
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
+
+  // Reset filters
+  const resetFilters = useCallback(() => {
+    setFilters({
+      search: '',
+      status: 'All Actions',
+      operator: 'All Operators',
+      category: 'All Categories'
+    });
+    setCurrentPage(1);
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 transition-colors duration-300">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-3 sm:p-4 lg:p-6 transition-colors duration-300">
       {/* Header Section */}
-      <div className="mb-8 animate-fadeIn">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-4 sm:space-y-0">
-          <div className="space-y-2">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                <Activity className="h-6 w-6 text-white" />
+      <div className="mb-4 sm:mb-6 lg:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0">
+          <div className="mb-2 sm:mb-0">
+            <div className="flex items-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
+              <div className="p-1.5 sm:p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex-shrink-0">
+                <Activity className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 dark:text-blue-400" />
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Event Logs
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  Monitor and manage system event logs and activities
-                </p>
-              </div>
-            </div>
-            
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center space-x-2">
-                  <div className="p-1 bg-green-100 rounded">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Success</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {eventLogs.filter(log => log.status === 'Success').length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center space-x-2">
-                  <div className="p-1 bg-red-100 rounded">
-                    <XCircle className="h-4 w-4 text-red-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Errors</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {eventLogs.filter(log => log.status === 'Error').length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center space-x-2">
-                  <div className="p-1 bg-yellow-100 rounded">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Warnings</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {eventLogs.filter(log => log.status === 'Warning').length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm border border-gray-100 dark:border-gray-700">
-                <div className="flex items-center space-x-2">
-                  <div className="p-1 bg-blue-100 rounded">
-                    <Info className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Info</p>
-                    <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                      {eventLogs.filter(log => log.status === 'Info').length}
-                    </p>
-                  </div>
-                </div>
+          <div>
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white">
+              Event Logs
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-0.5 sm:mt-1">
+              Monitor and manage system event logs and activities
+            </p>
               </div>
             </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
-            <Button
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <button
               onClick={handleRefresh}
-              variant="outline"
-              size="sm"
               disabled={loading || refreshing}
-              className="flex items-center transition-all duration-200 hover:shadow-md"
+              className="flex items-center px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-sm hover:shadow-md"
             >
               {refreshing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2 animate-spin" />
               ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <RefreshCw className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
               )}
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </Button>
+              <span className="hidden sm:inline">{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+              <span className="sm:hidden">{refreshing ? '...' : 'Refresh'}</span>
+            </button>
             
-            <div className="relative">
-              <Button 
-                onClick={() => setShowExportDropdown(!showExportDropdown)}
-                className="flex items-center bg-blue-600 hover:bg-blue-700 transition-all duration-200 hover:shadow-md"
-                disabled={exporting}
-              >
-                {exporting ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4 mr-2" />
-                )}
-                {exporting ? 'Exporting...' : 'Export'}
-              </Button>
-              
-              {/* Export Dropdown */}
-              {showExportDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 z-10 animate-fadeIn">
-                  <div className="py-1">
-                    <button
-                      onClick={() => handleExport('csv')}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 transition-colors duration-200"
-                    >
-                      <FileText className="h-4 w-4 mr-2" />
-                      Export as CSV
-                    </button>
-                    <button
-                      onClick={() => handleExport('pdf')}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 transition-colors duration-200"
-                    >
-                      <FileText className="h-4 w-4 mr-2" />
-                      Export as PDF
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>
 
       {/* Search and Filter Section */}
-      <Card className="mb-6 shadow-sm hover:shadow-md transition-shadow duration-200">
-        <CardContent className="pt-6">
-          {/* Search Bar */}
-          <div className="mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 mb-4 sm:mb-6 lg:mb-8">
+        <div className="p-4 sm:p-5 lg:p-6">
+          {/* Search Bar with improved accessibility */}
+          <div className="mb-3 sm:mb-4">
+            <label htmlFor="search-input" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
+              Search Event Logs
+            </label>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-              <Input
+              <Search className="absolute left-2.5 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <input
+                 id="search-input"
                 type="text"
-                placeholder="Search event ID, message or operator..."
+                 placeholder="Search event ID, action, operator..."
                 value={filters.search}
                 onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm transition-all duration-200"
+                className="w-full pl-8 sm:pl-10 pr-8 sm:pr-10 py-2 sm:py-2.5 lg:py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs sm:text-sm transition-all duration-200 shadow-sm focus:shadow-md"
+                aria-label="Search event logs"
+                aria-describedby="search-help"
+                autoComplete="off"
+                autoFocus={false}
               />
               {filters.search && (
                 <button
                   onClick={() => handleFilterChange('search', '')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-400 transition-colors duration-200"
+                  className="absolute right-2.5 sm:right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                  aria-label="Clear search"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </button>
               )}
             </div>
-          </div>
+             <p id="search-help" className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+               <span className="hidden sm:inline">Search by event ID, action, category, operator, date, time, or status • Press <kbd className="px-1 py-0.5 text-xs bg-gray-100 dark:bg-gray-700 rounded">Ctrl+K</kbd> to focus search</span>
+               <span className="sm:hidden">Search all fields</span>
+             </p>
+             
 
-          {/* Filters - Responsive grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {/* Action Filter */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Action</label>
-              <div className="relative">
-                <select
-                  value={filters.action}
-                  onChange={(e) => handleFilterChange('action', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                >
-                  <option value="All Actions">All Actions</option>
-                  {ACTIONS.map(action => (
-                    <option key={action} value={action}>{action}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <Filter className="h-4 w-4 text-gray-400" />
-                </div>
-              </div>
+            {/* Filter Dropdowns - Horizontal Layout */}
+            <div className="mt-4 sm:mt-5 lg:mt-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
+                {/* Operator Filter Dropdown */}
+            <div>
+                  <label htmlFor="operator-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
+                    <User className="h-3 w-3 sm:h-4 sm:w-4 mr-1 inline-block align-text-bottom" />
+                    Filter by Operator:
+                  </label>
+              <select
+                    id="operator-filter"
+                    value={filters.operator}
+                    onChange={(e) => handleFilterChange('operator', e.target.value)}
+                    className="w-full px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 shadow-sm focus:shadow-md"
+                    aria-label="Filter event logs by operator"
+                  >
+                    <option value="All Operators">All Operators</option>
+                    {OPERATORS.map((operator) => (
+                      <option key={operator} value={operator}>
+                        {operator.charAt(0).toUpperCase() + operator.slice(1)}
+                      </option>
+                ))}
+              </select>
             </div>
 
-            {/* Category Filter */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Category</label>
-              <div className="relative">
-                <select
-                  value={filters.category}
-                  onChange={(e) => handleFilterChange('category', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                >
-                  <option value="All Categories">All Categories</option>
-                  {CATEGORIES.map(category => (
-                    <option key={category} value={category}>{category}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                  <Database className="h-4 w-4 text-gray-400" />
-                </div>
-              </div>
+                {/* Category Filter Dropdown */}
+            <div>
+                  <label htmlFor="category-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 sm:mb-2">
+                    <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-1 inline-block align-text-bottom" />
+                    Filter by Category:
+                  </label>
+              <select
+                    id="category-filter"
+                value={filters.category}
+                onChange={(e) => handleFilterChange('category', e.target.value)}
+                    className="w-full px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 shadow-sm focus:shadow-md"
+                    aria-label="Filter event logs by category"
+              >
+                <option value="All Categories">All Categories</option>
+                    {CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                ))}
+              </select>
             </div>
-
-            {/* Date From */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">From Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="date"
-                  value={filters.dateFrom}
-                  onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                />
-              </div>
             </div>
-
-            {/* Date To */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">To Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="date"
-                  value={filters.dateTo}
-                  onChange={(e) => handleFilterChange('dateTo', e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                />
-              </div>
             </div>
           </div>
 
-          {/* Status Filter Buttons */}
-          <div className="flex flex-wrap gap-2">
-            {['All Status', ...STATUSES].map((status) => {
-              const isSelected = filters.status === status;
-              const StatusIcon = status === 'All Status' ? Activity : STATUS_ICONS[status as keyof typeof STATUS_ICONS];
+
+          {/* Action Filter Buttons */}
+          <div className="mt-4 sm:mt-5 lg:mt-6">
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4">
+              <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+                <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                Filter by Action:
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:gap-3">
+              {['All Actions', ...STATUSES].map((action) => {
+                const isSelected = filters.status === action;
+                const ActionIcon = action === 'All Actions' ? Activity : STATUS_ICONS[action as keyof typeof STATUS_ICONS];
               
               return (
                 <button
-                  key={status}
-                  onClick={() => handleFilterChange('status', status)}
-                  className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-lg border transition-all duration-200 ${
+                    key={action}
+                    onClick={() => handleFilterChange('status', action)}
+                    className={`inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 lg:py-2.5 text-xs sm:text-sm font-medium rounded-lg border transition-all duration-200 hover:scale-105 ${
                     isSelected
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-md hover:bg-blue-700'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-gray-400'
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-blue-600 shadow-lg'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm hover:shadow-md'
                   }`}
+                    aria-pressed={isSelected}
+                    aria-label={`Filter by ${action} action`}
                 >
-                  {StatusIcon && <StatusIcon className="h-4 w-4 mr-2" />}
-                  {status}
+                    {ActionIcon && <ActionIcon className="h-3 w-3 mr-1 sm:mr-1.5" />}
+                    {action}
                 </button>
               );
             })}
           </div>
-        </CardContent>
-      </Card>
+            
+            {/* Clear Filters Button */}
+            {(filters.search || filters.status !== 'All Actions' || filters.operator !== 'All Operators' || filters.category !== 'All Categories') && (
+              <div className="mt-2.5 sm:mt-3">
+                <button
+                  onClick={resetFilters}
+                  className="inline-flex items-center px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200"
+                  aria-label="Clear all filters"
+                >
+                  <X className="h-3 w-3 mr-1 sm:mr-1.5" />
+                  Clear All Filters
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Results Summary */}
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
-        <div className="flex items-center space-x-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg px-4 py-2 shadow-sm border border-gray-100 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Showing <span className="font-semibold text-gray-900 dark:text-white">{startIndex + 1}</span> to{' '}
-              <span className="font-semibold text-gray-900 dark:text-white">{Math.min(startIndex + itemsPerPage, filteredLogs.length)}</span> of{' '}
-              <span className="font-semibold text-gray-900 dark:text-white">{filteredLogs.length}</span> events
-            </p>
-          </div>
-          
-          {filteredLogs.length !== eventLogs.length && (
-            <div className="bg-blue-50 rounded-lg px-3 py-2 border border-blue-200">
-              <p className="text-xs text-blue-700">
-                <Filter className="h-3 w-3 inline mr-1" />
-                {eventLogs.length - filteredLogs.length} events filtered out
-              </p>
-            </div>
-          )}
+      <div className="mb-3 sm:mb-4 flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
+        <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+          Showing <span className="font-semibold text-gray-900 dark:text-white">{startIndex + 1}</span> to{' '}
+          <span className="font-semibold text-gray-900 dark:text-white">{Math.min(startIndex + itemsPerPage, filteredLogs.length)}</span> of{' '}
+          <span className="font-semibold text-gray-900 dark:text-white">{filteredLogs.length}</span> events
         </div>
         
         {error && (
-          <div className="flex items-center text-red-600 text-sm bg-red-50 px-3 py-2 rounded-lg border border-red-200">
-            <AlertCircle className="h-4 w-4 mr-2" />
+          <div className="flex items-center text-red-600 text-xs sm:text-sm">
+            <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
             {error}
           </div>
         )}
       </div>
 
       {/* Main Content */}
-      <Card>
-        <CardContent className="p-0">
+      <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              <span className="ml-2 text-gray-600 dark:text-gray-400">Loading event logs...</span>
+            <LoadingSpinner />
+          ) : error ? (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Error Loading Event Logs</h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-4">{error}</p>
+                <button
+                onClick={handleRefresh}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200"
+                >
+                Try Again
+                </button>
             </div>
           ) : filteredLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <AlertCircle className="h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No event logs found</h3>
-              <p className="text-gray-500 dark:text-gray-400 text-center max-w-md">
-                Try adjusting your search criteria or refresh the page to load new events.
-              </p>
-            </div>
+            <EmptyState filters={filters} resetFilters={resetFilters} />
           ) : (
             <>
               {/* Desktop Table View */}
               <div className="hidden lg:block overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Event ID
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Action
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-400 uppercase tracking-wider">
-                        Operator
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Category
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-400 uppercase tracking-wider">
-                        Timestamp
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Operator
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        Time
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200">
-                    {paginatedLogs.map((log, index) => (
-                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-mono text-blue-600 font-semibold">{log.eventId}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${getActionColor(log.action)}`}>
-                            {log.action}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900 dark:text-white">{log.operator}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900 dark:text-white font-mono">{log.timestamp}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={getStatusBadgeClass(log.status)}>
-                            {getStatusIcon(log.status)}
-                            {log.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <div className="flex items-center space-x-2">
-                            <button 
-                              onClick={() => {
-                                setSelectedLog(log);
-                                setShowDetailModal(true);
-                              }}
-                              className="inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200"
-                            >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {paginatedLogs.map((log) => (
+                      <EventLogRow
+                        key={log.id}
+                        log={log}
+                        onViewDetails={handleViewDetails}
+                        getActionColor={getActionColor}
+                        getActionIcon={getActionIcon}
+                        getCategoryColor={getCategoryColor}
+                        getStatusColor={getStatusColor}
+                        getStatusIcon={getStatusIcon}
+                      />
                     ))}
                   </tbody>
                 </table>
               </div>
 
               {/* Mobile/Tablet Card View */}
-              <div className="lg:hidden space-y-4">
-                {paginatedLogs.map((log) => (
-                  <div key={log.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow duration-200">
-                    {/* Header */}
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center space-x-2">
-                        <div className="text-sm font-mono text-blue-600 font-semibold">{log.eventId}</div>
-                        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getActionColor(log.action)}`}>
-                          {log.action}
-                        </span>
-                      </div>
-                      <span className={getStatusBadgeClass(log.status)}>
-                        {getStatusIcon(log.status)}
-                        {log.status}
-                      </span>
-                    </div>
-
-                    {/* Operator and Timestamp */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Operator:</span>
-                        <div className="text-sm text-gray-900 dark:text-white">{log.operator}</div>
-                      </div>
-                      <div>
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Time:</span>
-                        <div className="text-sm text-gray-900 dark:text-white font-mono">{log.timestamp}</div>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex justify-end">
-                      <button 
-                        onClick={() => {
-                          setSelectedLog(log);
-                          setShowDetailModal(true);
-                        }}
-                        className="inline-flex items-center justify-center px-3 py-2 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors duration-200"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View Details
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="lg:hidden">
+                <div className="space-y-3 sm:space-y-4 p-3 sm:p-4">
+                  {paginatedLogs.map((log) => (
+                    <EventLogCard
+                      key={log.id}
+                      log={log}
+                      onViewDetails={handleViewDetails}
+                      getActionColor={getActionColor}
+                      getActionIcon={getActionIcon}
+                      getCategoryColor={getCategoryColor}
+                      getStatusColor={getStatusColor}
+                      getStatusIcon={getStatusIcon}
+                    />
+                  ))}
+                </div>
               </div>
 
-              {/* Pagination */}
+              {/* Pagination with improved accessibility */}
               {totalPages > 1 && (
-                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                <div className="bg-white dark:bg-gray-800 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex-1 flex justify-between sm:hidden">
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
+                      className="relative inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                      aria-label="Go to previous page"
                     >
-                      <ChevronLeft className="h-4 w-4" />
                       Previous
-                    </Button>
-                    
-                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                    </button>
+                    <span className="text-xs text-gray-700 dark:text-gray-300 flex items-center">
                       Page {currentPage} of {totalPages}
                     </span>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
+                      className="relative inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                      aria-label="Go to next page"
                     >
                       Next
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
+                    </button>
+                  </div>
+                  <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-end">
+                    <div>
+                      <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        <button
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={currentPage === 1}
+                          className="relative inline-flex items-center px-2 py-1.5 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                          aria-label="Go to previous page"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </button>
+                        {(() => {
+                          const pages = [];
+                          const maxVisiblePages = 5;
+                          const startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                          const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                          
+                          // First page
+                          if (startPage > 1) {
+                            pages.push(
+                          <button
+                                key={1}
+                                onClick={() => handlePageChange(1)}
+                                className="relative inline-flex items-center px-4 py-2 border text-sm font-medium transition-colors duration-200 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                aria-label="Go to page 1"
+                              >
+                                1
+                              </button>
+                            );
+                            if (startPage > 2) {
+                              pages.push(
+                                <span key="ellipsis1" className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                                  ...
+                                </span>
+                              );
+                            }
+                          }
+                          
+                          // Visible pages
+                          for (let i = startPage; i <= endPage; i++) {
+                            pages.push(
+                              <button
+                                key={i}
+                                onClick={() => handlePageChange(i)}
+                                className={`relative inline-flex items-center px-3 py-1.5 border text-sm font-medium transition-colors duration-200 ${
+                                  i === currentPage
+                                ? 'z-10 bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-400 text-blue-600 dark:text-blue-400'
+                                : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                                aria-label={`Go to page ${i}`}
+                                aria-current={i === currentPage ? 'page' : undefined}
+                          >
+                                {i}
+                          </button>
+                            );
+                          }
+                          
+                          // Last page
+                          if (endPage < totalPages) {
+                            if (endPage < totalPages - 1) {
+                              pages.push(
+                                <span key="ellipsis2" className="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                                  ...
+                                </span>
+                              );
+                            }
+                            pages.push(
+                              <button
+                                key={totalPages}
+                                onClick={() => handlePageChange(totalPages)}
+                                className="relative inline-flex items-center px-4 py-2 border text-sm font-medium transition-colors duration-200 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                aria-label={`Go to page ${totalPages}`}
+                              >
+                                {totalPages}
+                              </button>
+                            );
+                          }
+                          
+                          return pages;
+                        })()}
+                        <button
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                          className="relative inline-flex items-center px-2 py-1.5 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
+                          aria-label="Go to next page"
+                        >
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      </nav>
+                    </div>
                   </div>
                 </div>
               )}
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Detail Modal */}
+      {/* Detail Modal with improved accessibility */}
       {showDetailModal && selectedLog && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">Event Details</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setSelectedLog(null);
-                }}
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-3 sm:p-4 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+        >
+          <div className="bg-white dark:bg-gray-800 rounded-lg sm:rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 id="modal-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+                Event Details
+              </h2>
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors duration-200"
+                aria-label="Close modal"
               >
-                ×
-              </Button>
+                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+              </button>
             </div>
 
-            <div className="space-y-6">
-              {/* Basic Information */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Event ID</label>
-                    <div className="text-lg font-mono font-bold text-blue-600">
-                      {selectedLog?.eventId || 'N/A'}
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Action</label>
-                    <div className="flex items-center">
-                      <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getActionColor(selectedLog?.action || 'Create')}`}>
-                        {selectedLog?.action || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Category</label>
-                    <div className="text-lg font-medium text-gray-800 dark:text-gray-200">
-                      {selectedLog?.category || 'N/A'}
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Status</label>
-                    <div className="flex items-center">
-                      <span className={getStatusBadgeClass(selectedLog?.status || 'Info')}>
-                        {selectedLog?.status || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Operator</label>
-                    <div className="text-lg font-medium text-gray-800 dark:text-gray-200">
-                      {selectedLog?.operator || 'N/A'}
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Date</label>
-                    <div className="text-lg font-medium text-gray-800 dark:text-gray-200">
-                      {selectedLog?.date || 'N/A'}
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Timestamp</label>
-                    <div className="text-sm font-mono text-gray-800 dark:text-gray-200 break-all">
-                      {selectedLog?.timestamp || 'N/A'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Event Message */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Event Message</label>
-                <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-700 dark:to-gray-600 px-4 py-3 rounded-md">
-                  <p className="text-sm text-gray-900 dark:text-white break-words leading-relaxed">
-                    {selectedLog?.eventLogMessage || 'No message available'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Before/After Changes */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                    <span className="flex items-center">
-                      <span className="w-3 h-3 bg-red-500 rounded-full mr-2 shadow-sm"></span>
-                      Before Change
-                    </span>
-                  </label>
-                  <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900 dark:to-red-800 border border-red-200 dark:border-red-700 px-4 py-3 rounded-md min-h-[100px]">
-                    <p className="text-sm text-red-900 whitespace-pre-wrap break-words leading-relaxed">
-                      {selectedLog?.beforeChange || 'N/A'}
+            <div className="p-3 sm:p-4 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="space-y-3 sm:space-y-4">
+                {/* Basic Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Event ID</p>
+                    <p className="text-xs sm:text-sm text-gray-900 dark:text-white font-mono break-all">
+                      {selectedLog.eventId}
                     </p>
                   </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Timestamp</p>
+                    <p className="text-xs sm:text-sm text-gray-900 dark:text-white">
+                      {selectedLog.timestamp}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Performed By</p>
+                    <p className="text-xs sm:text-sm text-gray-900 dark:text-white truncate">
+                      {selectedLog.operator}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Status</p>
+                    <span className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium ${getStatusColor(selectedLog.status)}`}>
+                      {selectedLog.status}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-100 dark:border-gray-700">
-                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                    <span className="flex items-center">
-                      <span className="w-3 h-3 bg-green-500 rounded-full mr-2 shadow-sm"></span>
-                      After Change
+                {/* Action and Category */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Action</p>
+                    <span className={getActionColor(selectedLog.action)}>
+                      {getActionIcon(selectedLog.action)}
+                      {selectedLog.action}
                     </span>
-                  </label>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900 dark:to-green-800 border border-green-200 dark:border-green-700 px-4 py-3 rounded-md min-h-[100px]">
-                    <p className="text-sm text-green-900 whitespace-pre-wrap break-words leading-relaxed">
-                      {selectedLog?.afterChange || 'N/A'}
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Category</p>
+                    <span className={`inline-flex items-center justify-start px-2 sm:px-3 py-1 sm:py-1.5 text-xs font-bold rounded-full border-2 transition-all duration-300 hover:shadow-lg hover:scale-105 w-[95px] sm:w-[110px] ${getCategoryColor(selectedLog.category)}`}>
+                      {selectedLog.category}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Message */}
+                <div>
+                  <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Message</p>
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2.5 sm:p-3">
+                    <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 break-words">
+                      {selectedLog.eventLogMessage}
                     </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end mt-6">
-              <Button
-                onClick={() => {
-                  setShowDetailModal(false);
-                  setSelectedLog(null);
-                }}
-                variant="outline"
+            <div className="flex justify-end p-3 sm:p-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
               >
                 Close
-              </Button>
+              </button>
             </div>
           </div>
         </div>

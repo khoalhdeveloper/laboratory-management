@@ -1,15 +1,22 @@
 const express = require("express");
 const router = express.Router();
-const { useReagents, useReagentsForInstrument, getReagentUsageHistory } = require("../controllers/reagentUsage.controller");
+const { useReagents, useReagentsForInstrument, getReagentUsageHistory, getReagentUsageByUsedFor, getReagentUsageByInstrument } = require("../controllers/reagentUsage.controller");
 const { verifyToken, authorizeRole } = require("../middlewares/auth.middleware");
+const { checkSessionTimeout } = require("../middlewares/session.middleware");
 
-// Chỉ cho phép role NURSE, DOCTOR hoặc ADMIN dùng thuốc
-router.post("/use", verifyToken, authorizeRole(['admin','doctor','nurse']), useReagents);
 
-// Dùng thuốc cho thiết bị cụ thể
-router.post("/use-for-instrument", verifyToken, authorizeRole(['admin','doctor','nurse']), useReagentsForInstrument);
 
-// Xem lịch sử dùng thuốc (tất cả role được xem)
-router.get("/history", verifyToken, getReagentUsageHistory);
+
+router.post("/use", verifyToken, checkSessionTimeout, authorizeRole(['admin','doctor','nurse']), useReagents);
+
+router.post("/use-for-instrument", verifyToken, checkSessionTimeout, authorizeRole(['admin','doctor','nurse']), useReagentsForInstrument);
+
+router.get("/history", verifyToken, checkSessionTimeout, authorizeRole(['admin','doctor','nurse']), getReagentUsageHistory);
+
+router.get('/historyByUsedFor/:used_for', verifyToken, checkSessionTimeout, authorizeRole(['admin','doctor','nurse']), getReagentUsageByUsedFor);
+
+router.get('/historyByInstrument/:instrument_id', verifyToken, checkSessionTimeout, authorizeRole(['admin','doctor','nurse']), getReagentUsageByInstrument);
+
+
 
 module.exports = router;

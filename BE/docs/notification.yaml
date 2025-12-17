@@ -1,0 +1,118 @@
+tags:
+  - name: Notifications
+    description: API quản lý thông báo hệ thống và kho
+
+paths:
+  /api/messages/getMessage/{id}:
+    get:
+      summary: Lấy thông báo của một người dùng theo UserID
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: UserID cần lấy thông báo
+      responses:
+        200:
+          description: Lấy danh sách thông báo thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+        400:
+          description: Thiếu User ID
+        500:
+          description: Lỗi server
+
+  /api/messages/readMessage/{message_id}:
+    put:
+      summary: Đánh dấu một thông báo là đã đọc theo message_id
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: message_id
+          required: true
+          schema:
+            type: string
+          description: Mã thông báo (message_id)
+      responses:
+        200:
+          description: Đánh dấu đã đọc thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  data:
+                    $ref: "#/components/schemas/Notification"
+        400:
+          description: Thiếu Message ID
+        404:
+          description: Không tìm thấy thông báo
+        500:
+          description: Lỗi server
+
+  /api/messages/warehouse:
+    get:
+      summary: Lấy thông báo riêng của kho (Warehouse)
+      tags: [Notifications]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Lấy danh sách thông báo kho thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+        500:
+          description: Lỗi server
+
+components:
+  schemas:
+    Notification:
+      type: object
+      properties:
+        _id:
+          type: string
+        message_id:
+          type: string
+        userid:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        type:
+          type: string
+          enum: [info, success, warning, system]
+        isRead:
+          type: boolean
+        for:
+          type: string
+          example: user
+        createdAt:
+          type: string
+          format: date-time

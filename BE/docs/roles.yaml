@@ -1,0 +1,104 @@
+openapi: 3.0.0
+info:
+  title: Roles API
+  version: 1.0.0
+  description: Quản lý quyền và vai trò người dùng
+servers:
+  - url: http://localhost:5000
+
+# Tags
+
+# Quản lý quyền và vai trò
+# =======================
+tags:
+  - name: Roles
+    description: Quản lý quyền và vai trò người dùng
+
+paths:
+  /api/roles/get-roles/{roleCode}:
+    get:
+      tags: [Roles]
+      summary: Lấy quyền của một vai trò theo roleCode
+      description: Trả về danh sách quyền của vai trò. Chỉ admin có thể truy cập.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roleCode
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Mã vai trò
+      responses:
+        '200':
+          description: Lấy quyền vai trò thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePrivilegesResponse'
+        '404':
+          description: Không tìm thấy vai trò
+        '500':
+          description: Lỗi server
+  /api/roles/update-roles/{roleCode}:
+    put:
+      tags: [Roles]
+      summary: Cập nhật quyền của một vai trò theo roleCode
+      description: Chỉ admin có thể cập nhật quyền cho vai trò.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: roleCode
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Mã vai trò
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                privileges:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Cập nhật quyền vai trò thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePrivilegesResponse'
+        '400':
+          description: Privileges phải là một mảng
+        '404':
+          description: Không tìm thấy vai trò
+        '500':
+          description: Lỗi server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RolePrivilegesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            role:
+              type: string
+            privileges:
+              type: array
+              items:
+                type: string

@@ -1,0 +1,86 @@
+tags:
+  - name: System Settings
+    description: API cấu hình hệ thống (thời gian phiên, JWT, bảo mật đăng nhập)
+
+paths:
+  /api/settings/getConfig:
+    get:
+      summary: Lấy cấu hình hệ thống hiện tại
+      tags: [System Settings]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Lấy cấu hình thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/SystemSettings'
+        500:
+          description: Lỗi server
+
+  /api/settings/updateConfig:
+    put:
+      summary: Cập nhật cấu hình hệ thống
+      description: Chỉ Admin. Chỉ các trường hợp lệ (>0) mới được cập nhật.
+      tags: [System Settings]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessionTimeoutMinutes:
+                  type: number
+                  description: Thời gian hết hạn phiên (phút), mặc định 15
+                jwtExpirationHours:
+                  type: number
+                  description: Thời gian hết hạn JWT (giờ), mặc định 8
+                maxFailedLoginAttempts:
+                  type: number
+                  description: Số lần đăng nhập sai tối đa, mặc định 5
+                inactivityLockDays:
+                  type: number
+                  description: Khóa tài khoản sau X ngày không hoạt động, mặc định 90
+      responses:
+        200:
+          description: Cập nhật cấu hình thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  settings:
+                    $ref: '#/components/schemas/SystemSettings'
+        400:
+          description: Không có tham số hợp lệ để cập nhật
+        500:
+          description: Lỗi server
+
+components:
+  schemas:
+    SystemSettings:
+      type: object
+      properties:
+        sessionTimeoutMinutes:
+          type: number
+        jwtExpirationHours:
+          type: number
+        maxFailedLoginAttempts:
+          type: number
+        inactivityLockDays:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

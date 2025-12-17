@@ -14,10 +14,14 @@ import {
   Activity,
   Grid3X3,
   List,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { exportEventLogData } from '../../../utils/exportUtils';
 import { toast } from '../../../utils/toast';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
+import { eventLogAPI, type EventLogItem } from '../Axios/Axios';
 
 // Types
 interface EventLog {
@@ -44,6 +48,7 @@ interface FilterState {
 }
 
 const EventLog: React.FC = () => {
+  const { isDarkMode } = useGlobalTheme();
   const [eventLogs, setEventLogs] = useState<EventLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [filters, setFilters] = useState<FilterState>({
@@ -247,19 +252,72 @@ const EventLog: React.FC = () => {
   const loadEventLogs = async () => {
     try {
       setLoading(true);
-      // Uncomment this when API is ready
-      // const response = await dashboardAPI.getEventLogs();
-      // setEventLogs(response.data);
       
-      // Using mock data for now
-      setTimeout(() => {
-        setEventLogs(mockEventLogs);
-        setLoading(false);
-      }, 1000);
-    } catch (error) {
+      // Call API to get doctor event logs
+      const response = await eventLogAPI.getDoctorLogs();
+      const apiLogs = response.data.data || [];
+      
+      // Transform API data to match EventLog interface
+      const transformedLogs: EventLog[] = apiLogs.map((log: EventLogItem) => {
+        // Determine status based on message or default to Info
+        let status: 'Success' | 'Error' | 'Info' | 'Warning' = 'Info';
+        const message = log.message.toLowerCase();
+        if (message.includes('success') || message.includes('created') || message.includes('completed')) {
+          status = 'Success';
+        } else if (message.includes('error') || message.includes('failed')) {
+          status = 'Error';
+        } else if (message.includes('warning') || message.includes('deleted')) {
+          status = 'Warning';
+        }
+        
+        // Determine action from message
+        let action: EventLog['action'] = 'Modify';
+        if (message.includes('create')) action = 'Create';
+        else if (message.includes('update')) action = 'Update';
+        else if (message.includes('delete')) action = 'Delete';
+        else if (message.includes('add')) action = 'Add';
+        else if (message.includes('complete')) action = 'Complete';
+        else if (message.includes('activate')) action = 'Activate';
+        else if (message.includes('lock')) action = 'Lock';
+        
+        // Determine category from role or message
+        let category: EventLog['category'] = 'System';
+        if (log.role === 'doctor') category = 'Test Order';
+        else if (message.includes('instrument')) category = 'Instrument';
+        else if (message.includes('result')) category = 'Test Result';
+        else if (message.includes('comment')) category = 'Comment';
+        else if (message.includes('review')) category = 'Review';
+        else if (message.includes('user')) category = 'User';
+        
+        // BE already returns VN time, so use it directly without conversion
+        const createdAt = String(log.createdAt || '');
+        const datePart = createdAt.split('T')[0] || '';
+        const timePart = createdAt.split('T')[1]?.split('.')[0] || '';
+        const formattedTimestamp = `${datePart.split('-').reverse().join('/')} ${timePart}`;
+        
+        return {
+          id: log._id,
+          eventId: log.event_id,
+          action: action,
+          eventLogMessage: log.message,
+          operator: log.performedBy || 'Unknown User',
+          date: datePart,
+          timestamp: formattedTimestamp,
+          status: status,
+          category: category,
+          beforeChange: 'N/A',
+          afterChange: 'N/A'
+        };
+      });
+      
+      setEventLogs(transformedLogs);
+      toast.success('Event logs loaded successfully');
+    } catch (error: any) {
       console.error('Error loading event logs:', error);
-      // Fallback to mock data
+      toast.error(error.response?.data?.message || 'Failed to load event logs');
+      // Fallback to mock data on error
       setEventLogs(mockEventLogs);
+    } finally {
       setLoading(false);
     }
   };
@@ -328,39 +386,47 @@ const EventLog: React.FC = () => {
 
   // Enhanced status badge function
   const getStatusBadge = (status: string) => {
-    const baseClasses = "px-3 py-1 text-xs font-medium rounded-full flex items-center gap-1";
+    const baseClasses = "px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-medium rounded-full flex items-center gap-1 whitespace-nowrap";
     switch (status) {
       case 'Success':
         return (
-          <span className={`${baseClasses} bg-green-100 text-green-800`}>
-            <CheckCircle className="h-3 w-3" />
-            Success
+          <span className={`${baseClasses} transition-colors duration-300 ${
+            isDarkMode ? 'bg-green-900/30 text-green-300' : 'bg-green-100 text-green-800'
+          }`}>
+            <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Success</span>
           </span>
         );
       case 'Error':
         return (
-          <span className={`${baseClasses} bg-red-100 text-red-800`}>
-            <XCircle className="h-3 w-3" />
-            Error
+          <span className={`${baseClasses} transition-colors duration-300 ${
+            isDarkMode ? 'bg-red-900/30 text-red-300' : 'bg-red-100 text-red-800'
+          }`}>
+            <XCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Error</span>
           </span>
         );
       case 'Warning':
         return (
-          <span className={`${baseClasses} bg-yellow-100 text-yellow-800`}>
-            <AlertTriangle className="h-3 w-3" />
-            Warning
+          <span className={`${baseClasses} transition-colors duration-300 ${
+            isDarkMode ? 'bg-yellow-900/30 text-yellow-300' : 'bg-yellow-100 text-yellow-800'
+          }`}>
+            <AlertTriangle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Warning</span>
           </span>
         );
       case 'Info':
         return (
-          <span className={`${baseClasses} bg-blue-100 text-blue-800`}>
-            <AlertCircle className="h-3 w-3" />
-            Info
+          <span className={`${baseClasses} transition-colors duration-300 ${
+            isDarkMode ? 'bg-blue-900/30 text-blue-300' : 'bg-blue-100 text-blue-800'
+          }`}>
+            <AlertCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+            <span className="hidden xs:inline">Info</span>
           </span>
         );
       default:
         return (
-          <span className={`${baseClasses} bg-gray-100 text-gray-800`}>
+          <span className={`${baseClasses} ${isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-800'}`}>
             {status}
           </span>
         );
@@ -372,41 +438,49 @@ const EventLog: React.FC = () => {
     switch (action) {
       case 'Create':
       case 'Add':
-        return 'text-green-800 bg-green-100';
+        return isDarkMode ? 'text-green-300 bg-green-900/30' : 'text-green-800 bg-green-100';
       case 'Update':
       case 'Modify':
-        return 'text-blue-800 bg-blue-100';
+        return isDarkMode ? 'text-blue-300 bg-blue-900/30' : 'text-blue-800 bg-blue-100';
       case 'Delete':
-        return 'text-red-800 bg-red-100';
+        return isDarkMode ? 'text-red-300 bg-red-900/30' : 'text-red-800 bg-red-100';
       case 'Complete':
-        return 'text-purple-800 bg-purple-100';
+        return isDarkMode ? 'text-purple-300 bg-purple-900/30' : 'text-purple-800 bg-purple-100';
       case 'Activate':
-        return 'text-emerald-800 bg-emerald-100';
+        return isDarkMode ? 'text-emerald-300 bg-emerald-900/30' : 'text-emerald-800 bg-emerald-100';
       case 'Lock':
-        return 'text-orange-800 bg-orange-100';
+        return isDarkMode ? 'text-orange-300 bg-orange-900/30' : 'text-orange-800 bg-orange-100';
       default:
-        return 'text-gray-800 bg-gray-100';
+        return isDarkMode ? 'text-gray-300 bg-gray-700' : 'text-gray-800 bg-gray-100';
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 p-6">
+    <div className={`min-h-screen p-3 sm:p-4 lg:p-6 transition-colors duration-300 ${
+      isDarkMode 
+        ? 'bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900' 
+        : 'bg-gradient-to-br from-slate-50 via-white to-blue-50'
+    }`}>
       {/* Enhanced Header */}
-      <div className="bg-gradient-to-r from-slate-700 to-slate-800 rounded-2xl shadow-xl p-8 mb-8 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-              <FileText className="h-8 w-8" />
+      <div className={`rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-6 lg:p-8 mb-4 sm:mb-6 lg:mb-8 text-white transition-colors duration-300 ${
+        isDarkMode 
+          ? 'bg-gradient-to-r from-gray-800 to-gray-700' 
+          : 'bg-gradient-to-r from-slate-700 to-slate-800'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center space-x-3 sm:space-x-4">
+            <div className="p-2 sm:p-3 bg-white/20 rounded-xl backdrop-blur-sm flex-shrink-0">
+              <FileText className="h-6 w-6 sm:h-8 sm:w-8" />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold mb-2">System Event Logs</h1>
-              <p className="text-slate-200 text-lg">Monitor system activities and audit trail</p>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-1 sm:mb-2">System Event Logs</h1>
+              <p className="text-slate-200 text-sm sm:text-base lg:text-lg">Monitor system activities and audit trail</p>
             </div>
           </div>
-          <div className="hidden lg:block">
-            <div className="text-right">
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <div className="text-slate-300">Total Events</div>
+          <div className="flex sm:hidden lg:block">
+            <div className="text-left sm:text-right bg-white/10 sm:bg-transparent rounded-lg p-3 sm:p-0">
+              <div className="text-xl sm:text-2xl font-bold">{stats.total}</div>
+              <div className="text-slate-300 text-sm">Total Events</div>
             </div>
           </div>
         </div>
@@ -414,51 +488,65 @@ const EventLog: React.FC = () => {
 
       {/* Statistics Dashboard */}
       {showStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6 mb-4 sm:mb-6 lg:mb-8">
+          <div className={`rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all duration-300 ${
+            isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+          }`}>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Events</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs sm:text-sm font-medium ${
+                  isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                }`}>Total Events</p>
+                <p className={`text-xl sm:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{stats.total}</p>
               </div>
-              <div className="p-3 bg-blue-100 rounded-full">
-                <Activity className="h-6 w-6 text-blue-600" />
+              <div className={`p-2 sm:p-3 rounded-full flex-shrink-0 ${
+                isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100'
+              }`}>
+                <Activity className="h-4 w-4 sm:h-6 sm:w-6 text-blue-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300">
+          <div className={`rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all duration-300 ${
+            isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+          }`}>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Success</p>
-                <p className="text-2xl font-bold text-green-600">{stats.success}</p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Success</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600">{stats.success}</p>
               </div>
-              <div className="p-3 bg-green-100 rounded-full">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+              <div className={`p-2 sm:p-3 rounded-full flex-shrink-0 ${isDarkMode ? 'bg-green-900/30' : 'bg-green-100'}`}>
+                <CheckCircle className="h-4 w-4 sm:h-6 sm:w-6 text-green-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300">
+          <div className={`rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all duration-300 ${
+            isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+          }`}>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Warnings</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.warning}</p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Warnings</p>
+                <p className="text-xl sm:text-2xl font-bold text-yellow-600">{stats.warning}</p>
               </div>
-              <div className="p-3 bg-yellow-100 rounded-full">
-                <AlertTriangle className="h-6 w-6 text-yellow-600" />
+              <div className={`p-2 sm:p-3 rounded-full flex-shrink-0 ${isDarkMode ? 'bg-yellow-900/30' : 'bg-yellow-100'}`}>
+                <AlertTriangle className="h-4 w-4 sm:h-6 sm:w-6 text-yellow-600" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-300">
+          <div className={`rounded-xl shadow-sm border p-4 sm:p-6 hover:shadow-md transition-all duration-300 ${
+            isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+          }`}>
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Categories</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.categories}</p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs sm:text-sm font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Categories</p>
+                <p className="text-xl sm:text-2xl font-bold text-purple-600">{stats.categories}</p>
               </div>
-              <div className="p-3 bg-purple-100 rounded-full">
-                <BarChart3 className="h-6 w-6 text-purple-600" />
+              <div className={`p-2 sm:p-3 rounded-full flex-shrink-0 ${
+                isDarkMode ? 'bg-purple-900/30' : 'bg-purple-100'
+              }`}>
+                <BarChart3 className="h-4 w-4 sm:h-6 sm:w-6 text-purple-600" />
               </div>
             </div>
           </div>
@@ -466,91 +554,117 @@ const EventLog: React.FC = () => {
       )}
 
       {/* Controls Bar */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+      <div className={`rounded-xl shadow-sm border p-4 sm:p-6 mb-4 sm:mb-6 lg:mb-8 ${
+        isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+      }`}>
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0 gap-4">
           {/* Left side - Search */}
-          <div className="flex-1 max-w-md">
+          <div className="flex-1 max-w-full lg:max-w-md">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
               <input
                 type="text"
                 placeholder="Search event ID, message or operator..."
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                className={`w-full pl-9 sm:pl-10 pr-4 py-2 sm:py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-sm sm:text-base ${
+                  isDarkMode 
+                    ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400' 
+                    : 'border-gray-300 bg-white text-gray-900 placeholder-gray-500'
+                }`}
               />
             </div>
           </div>
 
           {/* Right side - Actions */}
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               onClick={() => setShowStats(!showStats)}
-              className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              className={`inline-flex items-center px-3 sm:px-4 py-2 rounded-lg font-medium transition-all duration-200 text-sm ${
                 showStats 
                   ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : isDarkMode 
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Stats
+              <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">Stats</span>
             </button>
 
-            <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            <div className={`flex items-center rounded-lg p-1 ${
+              isDarkMode ? 'bg-gray-700' : 'bg-gray-100'
+            }`}>
               <button
                 onClick={() => setViewMode('list')}
-                className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                className={`inline-flex items-center px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
                   viewMode === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? isDarkMode
+                      ? 'bg-gray-800 text-white shadow-sm'
+                      : 'bg-white text-gray-900 shadow-sm'
+                    : isDarkMode
+                      ? 'text-gray-400 hover:text-gray-300'
+                      : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <List className="h-4 w-4 mr-1" />
-                List
+                <List className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                <span className="hidden sm:inline">List</span>
               </button>
               <button
                 onClick={() => setViewMode('grid')}
-                className={`inline-flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                className={`inline-flex items-center px-2 sm:px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
                   viewMode === 'grid'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? isDarkMode
+                      ? 'bg-gray-800 text-white shadow-sm'
+                      : 'bg-white text-gray-900 shadow-sm'
+                    : isDarkMode
+                      ? 'text-gray-400 hover:text-gray-300'
+                      : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                <Grid3X3 className="h-4 w-4 mr-1" />
-                Grid
+                <Grid3X3 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                <span className="hidden sm:inline">Grid</span>
               </button>
             </div>
 
             <button
               onClick={loadEventLogs}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+              className={`inline-flex items-center px-3 sm:px-4 py-2 border rounded-lg shadow-sm text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 ${
+                isDarkMode 
+                  ? 'border-gray-600 text-gray-300 bg-gray-700 hover:bg-gray-600'
+                  : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+              }`}
             >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh
+              <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Refresh</span>
             </button>
             
             <div className="relative export-dropdown">
               <button 
                 onClick={() => setShowExportDropdown(!showExportDropdown)}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                className="inline-flex items-center px-3 sm:px-4 py-2 border border-transparent rounded-lg shadow-sm text-xs sm:text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
               >
-                <Download className="h-4 w-4 mr-2" />
-                Export
-                <svg className={`ml-2 h-4 w-4 transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <Download className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Export</span>
+                <svg className={`ml-1 sm:ml-2 h-3 w-3 sm:h-4 sm:w-4 transition-transform duration-200 ${showExportDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
               
               {showExportDropdown && (
-                <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[140px] animate-in slide-in-from-top-2 duration-200">
+                <div className={`absolute top-full right-0 mt-1 border rounded-lg shadow-lg z-20 min-w-[120px] sm:min-w-[140px] animate-in slide-in-from-top-2 duration-200 ${
+                  isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-200'
+                }`}>
                   <button
                     onClick={() => {
                       handleExport('excel');
                       setShowExportDropdown(false);
                     }}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg transition-colors duration-200 flex items-center"
+                    className={`block w-full text-left px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-t-lg transition-colors duration-200 flex items-center ${
+                      isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
-                    <Download className="h-4 w-4 mr-2" />
+                    <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
                     Export Excel
                   </button>
                   <button
@@ -558,9 +672,11 @@ const EventLog: React.FC = () => {
                       handleExport('pdf');
                       setShowExportDropdown(false);
                     }}
-                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg transition-colors duration-200 flex items-center"
+                    className={`block w-full text-left px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-b-lg transition-colors duration-200 flex items-center ${
+                      isDarkMode ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
-                    <Download className="h-4 w-4 mr-2" />
+                    <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
                     Export PDF
                   </button>
                 </div>
@@ -570,13 +686,19 @@ const EventLog: React.FC = () => {
         </div>
 
         {/* Filters Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 mt-4 sm:mt-6">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Action</label>
+            <label className={`block text-xs font-medium mb-2 transition-colors duration-300 ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            }`}>Action</label>
             <select
               value={filters.action}
               onChange={(e) => setFilters({ ...filters, action: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                isDarkMode 
+                  ? 'border-gray-600 bg-gray-700 text-white' 
+                  : 'border-gray-300 bg-white text-gray-900'
+              }`}
             >
               <option value="All Actions">All Actions</option>
               <option value="Create">Create</option>
@@ -591,11 +713,17 @@ const EventLog: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Category</label>
+            <label className={`block text-xs font-medium mb-2 transition-colors duration-300 ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            }`}>Category</label>
             <select
               value={filters.category}
               onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                isDarkMode 
+                  ? 'border-gray-600 bg-gray-700 text-white' 
+                  : 'border-gray-300 bg-white text-gray-900'
+              }`}
             >
               <option value="All Categories">All Categories</option>
               <option value="Test Order">Test Order</option>
@@ -609,11 +737,17 @@ const EventLog: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">Status</label>
+            <label className={`block text-xs font-medium mb-2 transition-colors duration-300 ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            }`}>Status</label>
             <select
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                isDarkMode 
+                  ? 'border-gray-600 bg-gray-700 text-white' 
+                  : 'border-gray-300 bg-white text-gray-900'
+              }`}
             >
               <option value="All Status">All Status</option>
               <option value="Success">Success</option>
@@ -624,27 +758,39 @@ const EventLog: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">From Date</label>
+            <label className={`block text-xs font-medium mb-2 transition-colors duration-300 ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            }`}>From Date</label>
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Calendar className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 sm:h-4 sm:w-4" />
               <input
                 type="date"
                 value={filters.dateFrom}
                 onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                  isDarkMode 
+                    ? 'border-gray-600 bg-gray-700 text-white' 
+                    : 'border-gray-300 bg-white text-gray-900'
+                }`}
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-2">To Date</label>
+            <label className={`block text-xs font-medium mb-2 transition-colors duration-300 ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-700'
+            }`}>To Date</label>
             <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Calendar className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-3 w-3 sm:h-4 sm:w-4" />
               <input
                 type="date"
                 value={filters.dateTo}
                 onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full pl-8 sm:pl-10 pr-2 sm:pr-4 py-1.5 sm:py-2 text-xs sm:text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                  isDarkMode 
+                    ? 'border-gray-600 bg-gray-700 text-white' 
+                    : 'border-gray-300 bg-white text-gray-900'
+                }`}
               />
             </div>
           </div>
@@ -652,7 +798,9 @@ const EventLog: React.FC = () => {
       </div>
 
       {/* Content Area */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      <div className={`rounded-xl shadow-sm border ${
+        isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+      }`}>
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -661,7 +809,7 @@ const EventLog: React.FC = () => {
         ) : filteredLogs.length === 0 ? (
           <div className="text-center py-20">
             <AlertCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-medium text-gray-900 mb-2">No event logs found</h3>
+            <h3 className={`text-xl font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>No event logs found</h3>
             <p className="text-gray-500 mb-6">Try adjusting your search criteria or refresh the page.</p>
             <button
               onClick={loadEventLogs}
@@ -676,64 +824,90 @@ const EventLog: React.FC = () => {
             {/* Table View */}
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+                <thead className={`transition-colors duration-300 ${
+                  isDarkMode ? 'bg-gray-700' : 'bg-gray-50'
+                }`}>
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className={`px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
                       Event ID
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className={`px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
                       Action
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className={`hidden md:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
                       Category
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className={`hidden lg:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
                       Operator
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className={`hidden xl:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
                       Timestamp
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className={`px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className={`px-3 sm:px-6 py-2 sm:py-3 text-left text-[10px] sm:text-xs font-medium uppercase tracking-wider transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                    }`}>
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className={`divide-y ${
+                  isDarkMode 
+                    ? 'bg-gray-800 divide-gray-700' 
+                    : 'bg-white divide-gray-200'
+                }`}>
                   {paginatedLogs.map((log, index) => (
-                    <tr key={log.id} className="hover:bg-gray-50 transition-colors duration-150" style={{ animationDelay: `${index * 50}ms` }}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-mono text-blue-600 font-semibold">{log.eventId}</div>
+                    <tr key={log.id} className={`transition-colors duration-150 ${
+                      isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+                    }`} style={{ animationDelay: `${index * 50}ms` }}>
+                      <td className="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
+                        <div className="text-xs sm:text-sm font-mono text-blue-600 font-semibold">{log.eventId}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${getActionColor(log.action)}`}>
+                      <td className="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 sm:px-3 py-1 text-[10px] sm:text-xs font-medium rounded-full ${getActionColor(log.action)}`}>
                           {log.action}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{log.category}</div>
+                      <td className="hidden md:table-cell px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
+                        <div className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-900'}`}>{log.category}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{log.operator}</div>
+                      <td className="hidden lg:table-cell px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
+                        <div className={`text-xs sm:text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-900'}`}>{log.operator}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 font-mono">{log.timestamp}</div>
+                      <td className="hidden xl:table-cell px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
+                        <div className={`text-xs sm:text-sm font-mono ${isDarkMode ? 'text-gray-300' : 'text-gray-900'}`}>{log.timestamp}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap">
                         {getStatusBadge(log.status)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-3 sm:px-6 py-2 sm:py-4 whitespace-nowrap text-xs sm:text-sm font-medium">
                         <button 
                           onClick={() => {
                             setSelectedLog(log);
                             setShowDetailModal(true);
                           }}
-                          className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-blue-600 bg-blue-100 hover:bg-blue-200 transition-colors duration-200"
+                          className={`inline-flex items-center px-2 sm:px-3 py-1 border border-transparent text-xs sm:text-sm font-medium rounded-md transition-colors duration-200 ${
+                            isDarkMode 
+                              ? 'text-blue-300 bg-blue-900/30 hover:bg-blue-900/50' 
+                              : 'text-blue-600 bg-blue-100 hover:bg-blue-200'
+                          }`}
                         >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
+                          <Eye className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">View</span>
                         </button>
                       </td>
                     </tr>
@@ -744,26 +918,40 @@ const EventLog: React.FC = () => {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="bg-gray-50 px-6 py-3 flex items-center justify-between border-t border-gray-200">
+              <div className={`px-3 sm:px-6 py-3 flex items-center justify-between border-t transition-colors duration-300 ${
+                isDarkMode 
+                  ? 'bg-gray-700 border-gray-600' 
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
                 <div className="flex-1 flex justify-between sm:hidden">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`relative inline-flex items-center px-3 sm:px-4 py-2 border text-xs sm:text-sm font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isDarkMode 
+                        ? 'border-gray-600 text-gray-300 bg-gray-700 hover:bg-gray-600'
+                        : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                    }`}
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`ml-3 relative inline-flex items-center px-3 sm:px-4 py-2 border text-xs sm:text-sm font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isDarkMode 
+                        ? 'border-gray-600 text-gray-300 bg-gray-700 hover:bg-gray-600'
+                        : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                    }`}
                   >
                     Next
                   </button>
                 </div>
                 <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm text-gray-700">
+                    <p className={`text-xs sm:text-sm transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
                       Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
                       <span className="font-medium">{Math.min(startIndex + itemsPerPage, filteredLogs.length)}</span> of{' '}
                       <span className="font-medium">{filteredLogs.length}</span> results
@@ -774,7 +962,11 @@ const EventLog: React.FC = () => {
                       <button
                         onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                         disabled={currentPage === 1}
-                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`relative inline-flex items-center px-2 py-2 rounded-l-md border text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
+                          isDarkMode 
+                            ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                        }`}
                       >
                         Previous
                       </button>
@@ -782,10 +974,12 @@ const EventLog: React.FC = () => {
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          className={`relative inline-flex items-center px-3 sm:px-4 py-2 border text-xs sm:text-sm font-medium ${
                             page === currentPage
                               ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                              : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                              : isDarkMode
+                                ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                           }`}
                         >
                           {page}
@@ -794,7 +988,11 @@ const EventLog: React.FC = () => {
                       <button
                         onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                         disabled={currentPage === totalPages}
-                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={`relative inline-flex items-center px-2 py-2 rounded-r-md border text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed ${
+                          isDarkMode 
+                            ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                        }`}
                       >
                         Next
                       </button>
@@ -807,50 +1005,70 @@ const EventLog: React.FC = () => {
         ) : (
           <>
             {/* Grid View */}
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="p-3 sm:p-4 lg:p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
                 {paginatedLogs.map((log, index) => (
                   <div 
                     key={log.id} 
-                    className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-all duration-300 hover:border-gray-300"
+                    className={`border rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition-all duration-300 ${
+                      isDarkMode 
+                        ? 'bg-gray-800 border-gray-700 hover:border-gray-600' 
+                        : 'bg-white border-gray-200 hover:border-gray-300'
+                    }`}
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     {/* Header */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                          <FileText className="h-5 w-5 text-blue-600" />
+                    <div className="flex items-start justify-between mb-3 sm:mb-4 gap-2">
+                      <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                        <div className={`p-1.5 sm:p-2 rounded-lg transition-colors duration-300 flex-shrink-0 ${
+                          isDarkMode ? 'bg-blue-900/30' : 'bg-blue-100'
+                        }`}>
+                          <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                         </div>
-                        <div>
-                          <div className="text-sm font-mono text-blue-600 font-semibold">{log.eventId}</div>
-                          <div className="text-xs text-gray-500">{log.category}</div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs sm:text-sm font-mono text-blue-600 font-semibold truncate">{log.eventId}</div>
+                          <div className={`text-[10px] sm:text-xs transition-colors duration-300 truncate ${
+                            isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                          }`}>{log.category}</div>
                         </div>
                       </div>
-                      {getStatusBadge(log.status)}
+                      <div className="flex-shrink-0">
+                        {getStatusBadge(log.status)}
+                      </div>
                     </div>
 
                     {/* Action */}
-                    <div className="mb-4">
-                      <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getActionColor(log.action)}`}>
+                    <div className="mb-3 sm:mb-4">
+                      <span className={`inline-flex px-2 sm:px-3 py-1 text-xs sm:text-sm font-medium rounded-full ${getActionColor(log.action)}`}>
                         {log.action}
                       </span>
                     </div>
 
                     {/* Operator and Timestamp */}
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-1.5 sm:space-y-2 mb-3 sm:mb-4">
                       <div>
-                        <span className="text-xs font-medium text-gray-500">Operator:</span>
-                        <div className="text-sm text-gray-900 truncate">{log.operator}</div>
+                        <span className={`text-[10px] sm:text-xs font-medium transition-colors duration-300 ${
+                          isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        }`}>Operator:</span>
+                        <div className={`text-xs sm:text-sm truncate transition-colors duration-300 ${
+                          isDarkMode ? 'text-white' : 'text-gray-900'
+                        }`}>{log.operator}</div>
                       </div>
                       <div>
-                        <span className="text-xs font-medium text-gray-500">Time:</span>
-                        <div className="text-sm text-gray-900 font-mono">{log.timestamp}</div>
+                        <span className={`text-[10px] sm:text-xs font-medium transition-colors duration-300 ${
+                          isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        }`}>Time:</span>
+                        <div className={`text-xs sm:text-sm font-mono transition-colors duration-300 ${
+                          isDarkMode ? 'text-white' : 'text-gray-900'
+                        }`}>{log.timestamp}</div>
                       </div>
                     </div>
 
                     {/* Message Preview */}
-                    <div className="mb-4">
-                      <p className="text-sm text-gray-600 line-clamp-2">{log.eventLogMessage}</p>
+                    <div className="mb-3 sm:mb-4">
+                      <p className={`text-xs sm:text-sm line-clamp-2 transition-colors duration-300 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                      }`}>{log.eventLogMessage}</p>
                     </div>
 
                     {/* Actions */}
@@ -860,9 +1078,13 @@ const EventLog: React.FC = () => {
                           setSelectedLog(log);
                           setShowDetailModal(true);
                         }}
-                        className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-lg text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors duration-200"
+                        className={`inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 border rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 ${
+                          isDarkMode 
+                            ? 'border-blue-600 text-blue-300 bg-blue-900/30 hover:bg-blue-900/50' 
+                            : 'border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100'
+                        }`}
                       >
-                        <Eye className="h-4 w-4 mr-2" />
+                        <Eye className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                         View Details
                       </button>
                     </div>
@@ -872,14 +1094,19 @@ const EventLog: React.FC = () => {
 
               {/* Pagination for Grid */}
               {totalPages > 1 && (
-                <div className="mt-8 flex items-center justify-center">
+                <div className="mt-6 sm:mt-8 flex items-center justify-center">
                   <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                     <button
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="relative inline-flex items-center px-4 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={`relative inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 rounded-l-md border text-xs sm:text-sm font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isDarkMode 
+                          ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                          : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
                     >
-                      Previous
+                      <span className="hidden xs:inline">Previous</span>
+                      <span className="xs:hidden"><ChevronLeft className="h-4 w-4" /></span>
                     </button>
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let page;
@@ -896,9 +1123,13 @@ const EventLog: React.FC = () => {
                         <button
                           key={page}
                           onClick={() => setCurrentPage(page)}
-                          className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          className={`relative inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 border text-xs sm:text-sm font-medium transition-colors duration-200 ${
                             page === currentPage
-                              ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                              ? isDarkMode
+                                ? 'z-10 bg-blue-600 border-blue-600 text-white'
+                                : 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                              : isDarkMode
+                              ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
                               : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                           }`}
                         >
@@ -909,9 +1140,14 @@ const EventLog: React.FC = () => {
                     <button
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="relative inline-flex items-center px-4 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className={`relative inline-flex items-center px-3 sm:px-4 py-1.5 sm:py-2 rounded-r-md border text-xs sm:text-sm font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isDarkMode 
+                          ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600' 
+                          : 'border-gray-300 bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
                     >
-                      Next
+                      <span className="hidden xs:inline">Next</span>
+                      <span className="xs:hidden"><ChevronRight className="h-4 w-4" /></span>
                     </button>
                   </nav>
                 </div>
@@ -923,28 +1159,40 @@ const EventLog: React.FC = () => {
 
       {/* Detail Modal */}
       {showDetailModal && selectedLog && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-2 sm:p-4"
              style={{
                backdropFilter: 'blur(8px)',
                WebkitBackdropFilter: 'blur(8px)',
                backgroundColor: 'rgba(0, 0, 0, 0.5)',
                transition: 'all 300ms ease-out'
              }}>
-          <div className="bg-white rounded-xl shadow-2xl border border-gray-100 p-8 w-full max-w-4xl transform max-h-[90vh] overflow-y-auto"
+          <div className={`rounded-lg sm:rounded-xl shadow-2xl border p-4 sm:p-6 lg:p-8 w-full max-w-4xl transform max-h-[90vh] overflow-y-auto ${
+            isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+          }`}
                style={{
                  animation: 'modalSlideIn 0.3s ease-out',
                  transformOrigin: 'center',
                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
                }}>
             {/* Modal Header */}
-            <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-full flex items-center justify-center shadow-lg">
-                  <Eye className="w-6 h-6 text-indigo-600" />
+            <div className={`flex items-center justify-between mb-4 sm:mb-6 pb-3 sm:pb-4 border-b transition-colors duration-300 ${
+              isDarkMode ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center shadow-lg transition-colors duration-300 flex-shrink-0 ${
+                  isDarkMode 
+                    ? 'bg-gradient-to-br from-indigo-700 to-indigo-800' 
+                    : 'bg-gradient-to-br from-indigo-100 to-indigo-200'
+                }`}>
+                  <Eye className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Event Log Details</h3>
-                  <p className="text-sm text-gray-500 mt-1">Detailed information about the event log entry</p>
+                <div className="min-w-0 flex-1">
+                  <h3 className={`text-lg sm:text-xl font-bold transition-colors duration-300 truncate ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>Event Log Details</h3>
+                  <p className={`text-xs sm:text-sm mt-0.5 sm:mt-1 transition-colors duration-300 truncate ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>Detailed information about the event log entry</p>
                 </div>
               </div>
               <button
@@ -952,66 +1200,122 @@ const EventLog: React.FC = () => {
                   setShowDetailModal(false);
                   setSelectedLog(null);
                 }}
-                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors duration-200 hover:shadow-md"
+                className={`p-1.5 sm:p-2 rounded-full transition-colors duration-200 hover:shadow-md flex-shrink-0 ${
+                  isDarkMode 
+                    ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                }`}
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
 
             {/* Modal Content */}
-            <div className="bg-gray-50 rounded-xl p-6 space-y-6">
+            <div className={`rounded-lg sm:rounded-xl p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 transition-colors duration-300 ${
+              isDarkMode ? 'bg-gray-700' : 'bg-gray-50'
+            }`}>
               {/* Basic Information */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Event ID</label>
-                    <div className="text-lg font-mono font-bold text-blue-600">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <div className="space-y-3 sm:space-y-4">
+                  <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>Event ID</label>
+                    <div className="text-base sm:text-lg font-mono font-bold text-blue-600 break-all">
                       {selectedLog?.eventId || 'N/A'}
                     </div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Action</label>
+                  <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>Action</label>
                     <div className="flex items-center">
-                      <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full ${getActionColor(selectedLog?.action || 'Create')}`}>
+                      <span className={`inline-flex px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm font-medium rounded-full ${getActionColor(selectedLog?.action || 'Create')}`}>
                         {selectedLog?.action || 'N/A'}
                       </span>
                     </div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Category</label>
-                    <div className="text-lg font-medium text-gray-800">
+                  <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>Category</label>
+                    <div className={`text-base sm:text-lg font-medium transition-colors duration-300 break-words ${
+                      isDarkMode ? 'text-white' : 'text-gray-800'
+                    }`}>
                       {selectedLog?.category || 'N/A'}
                     </div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Status</label>
+                  <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>Status</label>
                     <div className="flex items-center">
                       {getStatusBadge(selectedLog?.status || 'Info')}
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Operator</label>
-                    <div className="text-lg font-medium text-gray-800">
+                <div className="space-y-3 sm:space-y-4">
+                  <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>Operator</label>
+                    <div className={`text-base sm:text-lg font-medium transition-colors duration-300 break-words ${
+                      isDarkMode ? 'text-white' : 'text-gray-800'
+                    }`}>
                       {selectedLog?.operator || 'N/A'}
                     </div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Date</label>
-                    <div className="text-lg font-medium text-gray-800">
+                  <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>Date</label>
+                    <div className={`text-base sm:text-lg font-medium transition-colors duration-300 ${
+                      isDarkMode ? 'text-white' : 'text-gray-800'
+                    }`}>
                       {selectedLog?.date || 'N/A'}
                     </div>
                   </div>
                   
-                  <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Timestamp</label>
-                    <div className="text-sm font-mono text-gray-800 break-all">
+                  <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-1.5 sm:mb-2 transition-colors duration-300 ${
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    }`}>Timestamp</label>
+                    <div className={`text-xs sm:text-sm font-mono break-all transition-colors duration-300 ${
+                      isDarkMode ? 'text-white' : 'text-gray-800'
+                    }`}>
                       {selectedLog?.timestamp || 'N/A'}
                     </div>
                   </div>
@@ -1019,40 +1323,76 @@ const EventLog: React.FC = () => {
               </div>
 
               {/* Event Message */}
-              <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Event Message</label>
-                <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 rounded-md">
-                  <p className="text-sm text-gray-900 break-words leading-relaxed">
+              <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                isDarkMode 
+                  ? 'bg-gray-600 border-gray-500' 
+                  : 'bg-white border-gray-100'
+              }`}>
+                <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-2 sm:mb-3 transition-colors duration-300 ${
+                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                }`}>Event Message</label>
+                <div className={`px-3 sm:px-4 py-2 sm:py-3 rounded-md transition-colors duration-300 ${
+                  isDarkMode 
+                    ? 'bg-gradient-to-r from-gray-700 to-gray-600' 
+                    : 'bg-gradient-to-r from-gray-50 to-gray-100'
+                }`}>
+                  <p className={`text-xs sm:text-sm break-words leading-relaxed transition-colors duration-300 ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
                     {selectedLog?.eventLogMessage || 'No message available'}
                   </p>
                 </div>
               </div>
 
               {/* Before/After Changes */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
+                <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                  isDarkMode 
+                    ? 'bg-gray-600 border-gray-500' 
+                    : 'bg-white border-gray-100'
+                }`}>
+                  <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-2 sm:mb-3 transition-colors duration-300 ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
                     <span className="flex items-center">
-                      <span className="w-3 h-3 bg-red-500 rounded-full mr-2 shadow-sm"></span>
-                      Before Change
+                      <span className="w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full mr-1.5 sm:mr-2 shadow-sm flex-shrink-0"></span>
+                      <span className="text-[10px] sm:text-xs">Before Change</span>
                     </span>
                   </label>
-                  <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 px-4 py-3 rounded-md min-h-[100px]">
-                    <p className="text-sm text-red-900 whitespace-pre-wrap break-words leading-relaxed">
+                  <div className={`border px-3 sm:px-4 py-2 sm:py-3 rounded-md min-h-[80px] sm:min-h-[100px] transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'bg-gradient-to-br from-red-900/30 to-red-800/30 border-red-800' 
+                      : 'bg-gradient-to-br from-red-50 to-red-100 border-red-200'
+                  }`}>
+                    <p className={`text-xs sm:text-sm whitespace-pre-wrap break-words leading-relaxed transition-colors duration-300 ${
+                      isDarkMode ? 'text-red-200' : 'text-red-900'
+                    }`}>
                       {selectedLog?.beforeChange || 'N/A'}
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                <div className={`rounded-lg p-3 sm:p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                  isDarkMode 
+                    ? 'bg-gray-600 border-gray-500' 
+                    : 'bg-white border-gray-100'
+                }`}>
+                  <label className={`block text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-2 sm:mb-3 transition-colors duration-300 ${
+                    isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
                     <span className="flex items-center">
-                      <span className="w-3 h-3 bg-green-500 rounded-full mr-2 shadow-sm"></span>
-                      After Change
+                      <span className="w-2 h-2 sm:w-3 sm:h-3 bg-green-500 rounded-full mr-1.5 sm:mr-2 shadow-sm flex-shrink-0"></span>
+                      <span className="text-[10px] sm:text-xs">After Change</span>
                     </span>
                   </label>
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 px-4 py-3 rounded-md min-h-[100px]">
-                    <p className="text-sm text-green-900 whitespace-pre-wrap break-words leading-relaxed">
+                  <div className={`border px-3 sm:px-4 py-2 sm:py-3 rounded-md min-h-[80px] sm:min-h-[100px] transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'bg-gradient-to-br from-green-900/30 to-green-800/30 border-green-800' 
+                      : 'bg-gradient-to-br from-green-50 to-green-100 border-green-200'
+                  }`}>
+                    <p className={`text-xs sm:text-sm whitespace-pre-wrap break-words leading-relaxed transition-colors duration-300 ${
+                      isDarkMode ? 'text-green-200' : 'text-green-900'
+                    }`}>
                       {selectedLog?.afterChange || 'N/A'}
                     </p>
                   </div>
@@ -1061,13 +1401,19 @@ const EventLog: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex space-x-4 pt-6 mt-6 border-t border-gray-200">
+            <div className={`flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4 pt-4 sm:pt-6 mt-4 sm:mt-6 border-t transition-colors duration-300 ${
+              isDarkMode ? 'border-gray-700' : 'border-gray-200'
+            }`}>
               <button
                 onClick={() => {
                   setShowDetailModal(false);
                   setSelectedLog(null);
                 }}
-                className="flex-1 border-2 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 px-6 py-3 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
+                className={`w-full sm:flex-1 border-2 px-4 sm:px-6 py-2 sm:py-3 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 hover:shadow-md ${
+                  isDarkMode 
+                    ? 'border-gray-600 hover:border-gray-500 text-gray-300 hover:text-white hover:bg-gray-700' 
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                }`}
               >
                 Close
               </button>

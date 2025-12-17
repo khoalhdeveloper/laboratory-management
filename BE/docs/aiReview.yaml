@@ -1,0 +1,138 @@
+tags:
+  - name: AI Review
+    description: API phân tích kết quả xét nghiệm bằng AI (Gemini)
+
+paths:
+  /api/ai-reviews/analyze/{order_code}:
+    post:
+      summary: Phân tích kết quả xét nghiệm bằng AI theo order_code
+      description: Điều dưỡng (nurse) gọi để AI tạo nhận xét 1-3 câu và lưu vào test result.
+      tags: [AI Review]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+          description: Mã đơn hàng xét nghiệm
+      responses:
+        200:
+          description: Phân tích AI thành công và đã lưu
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      order_code:
+                        type: string
+                      ai_description:
+                        type: string
+                      model:
+                        type: string
+                        example: gemini-2.5-flash
+        403:
+          description: Không có quyền truy cập (chỉ nurse)
+        404:
+          description: Không tìm thấy test result
+        500:
+          description: Lỗi server hoặc cấu hình API key không hợp lệ
+
+  /api/ai-reviews/description/{order_code}:
+    get:
+      summary: Lấy mô tả AI theo order_code
+      description: Nurse hoặc bác sĩ tạo kết quả có thể xem mô tả AI đã lưu.
+      tags: [AI Review]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Lấy mô tả AI thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      order_code:
+                        type: string
+                      ai_description:
+                        type: string
+                        nullable: true
+                      has_ai_description:
+                        type: boolean
+        403:
+          description: Không có quyền truy cập (nurse hoặc đúng bác sĩ tạo kết quả)
+        404:
+          description: Không tìm thấy test result
+        500:
+          description: Lỗi server
+    put:
+      summary: Cập nhật hoặc tự động tạo mô tả AI cho kết quả
+      description: Nếu body không có description hoặc rỗng, hệ thống sẽ tự tạo (mock/gọi AI) và lưu.
+      tags: [AI Review]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: order_code
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                  description: Nội dung mô tả AI muốn cập nhật (tùy chọn)
+      responses:
+        200:
+          description: Cập nhật mô tả AI thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      order_code:
+                        type: string
+                      ai_description:
+                        type: string
+        201:
+          description: Tự động tạo mô tả AI và lưu thành công
+        403:
+          description: Không có quyền truy cập (nurse hoặc đúng bác sĩ tạo kết quả)
+        404:
+          description: Không tìm thấy test result
+        500:
+          description: Lỗi server

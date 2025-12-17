@@ -1,0 +1,250 @@
+tags:
+  - name: Admin
+    description: Account management API for Admin
+  - name: User
+    description: Account management API for User
+  - name: Nurse
+    description: Account management API for Nurse
+
+paths:
+  /api/admin/accounts/get-all-accounts:
+    get:
+      summary: Get all accounts list
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+
+  /api/admin/accounts/delete-account:
+    put:
+      summary: Delete (or deactivate) account
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userid:
+                  type: string
+                isActive:
+                  type: boolean
+      responses:
+        200:
+          description: Deleted successfully
+
+  /api/admin/accounts/update-account/{userid}:
+    put:
+      summary: Update account
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userid
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Account"
+      responses:
+        200:
+          description: Updated successfully
+
+  /api/admin/accounts/change-password/{userid}:
+    post:
+      summary: Change password for account
+      tags: [Admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userid
+          required: true
+          schema:
+            type: string
+          description: UserID of account to change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                oldPassword:
+                  type: string
+                  description: Old password
+                newPassword:
+                  type: string
+                  description: New password
+              required:
+                - oldPassword
+                - newPassword
+      responses:
+        200:
+          description: Password changed successfully
+        400:
+          description: Old password is incorrect
+        404:
+          description: Account not found
+
+  /api/accounts/update-my-account:
+    put:
+      summary: Update own account information (User)
+      description: User updates their own personal information. If Admin, can also update role and status.
+      tags: [User]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                image:
+                  type: string
+                email:
+                  type: string
+                phoneNumber:
+                  type: string
+                fullName:
+                  type: string
+                identifyNumber:
+                  type: string
+                age:
+                  type: integer
+                address:
+                  type: string
+                dateOfBirth:
+                  type: string
+                  format: date
+      responses:
+        200:
+          description: Updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  account:
+                    $ref: "#/components/schemas/Account"
+        400:
+          description: UserId not found in token
+        403:
+          description: You don't have permission to update this account
+        404:
+          description: Account not found
+
+  /api/admin/accounts/history/{userid}:
+    get:
+      summary: Get update history of specific user (All users)
+      tags: [User]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userid
+          required: true
+          schema:
+            type: string
+          description: UserID to view history
+      responses:
+        200:
+          description: History retrieved successfully
+
+  /api/admin/accounts/by-email/{email}:
+    get:
+      summary: Get account information by email
+      description: This function is for Admin and Nurse to search account information by email
+      tags: [Admin, Nurse]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: email
+          required: true
+          schema:
+            type: string
+          description: Email of account to find
+      responses:
+        200:
+          description: Account found successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        400:
+          description: Email is required
+        404:
+          description: No account found with this email
+        403:
+          description: You don't have permission to access this function
+
+  /api/admin/accounts/get-all-account-nurse:
+    get:
+      summary: Get all account nurse
+      tags: [User]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Get all account nurse successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+        403:
+          description: You don't have permission to access this function
+        500:
+          description: Internal server error
+
+components:
+  schemas:
+    Account:
+      type: object
+      properties:
+        userid:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        email:
+          type: string
+        phoneNumber:
+          type: string
+        fullName:
+          type: string
+        identifyNumber:
+          type: string
+        age:
+          type: integer
+        address:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        role:
+          type: string

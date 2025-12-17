@@ -1,0 +1,218 @@
+tags:
+  - name: Vendors
+    description: API quản lý nhà cung cấp (Vendors)
+
+paths:
+  /api/vendors/getAllVendors:
+    get:
+      summary: Lấy danh sách tất cả nhà cung cấp
+      tags: [Vendors]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Lấy danh sách vendor thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        vendor_id:
+                          type: string
+                        vendor_name:
+                          type: string
+                        contact_info:
+                          $ref: '#/components/schemas/VendorContactInfo'
+        500:
+          description: Lỗi server
+
+  /api/vendors/getVendorById/{vendor_id}:
+    get:
+      summary: Xem chi tiết vendor theo vendor_id
+      tags: [Vendors]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: vendor_id
+          required: true
+          schema:
+            type: string
+          description: Mã nhà cung cấp
+      responses:
+        200:
+          description: Lấy vendor thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Vendor'
+        404:
+          description: Không tìm thấy vendor
+        500:
+          description: Lỗi server
+
+  /api/vendors/createVendor:
+    post:
+      summary: Tạo vendor mới
+      tags: [Vendors]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - vendor_id
+                - vendor_name
+                - contact_info
+              properties:
+                vendor_id:
+                  type: string
+                vendor_name:
+                  type: string
+                contact_info:
+                  $ref: '#/components/schemas/VendorContactInfo'
+                address:
+                  type: string
+      responses:
+        201:
+          description: Tạo vendor thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Vendor'
+        400:
+          description: Vendor ID đã tồn tại hoặc dữ liệu không hợp lệ
+        500:
+          description: Lỗi server
+
+  /api/vendors/updateVendor/{vendor_id}:
+    put:
+      summary: Cập nhật thông tin vendor
+      tags: [Vendors]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: vendor_id
+          required: true
+          schema:
+            type: string
+          description: Mã nhà cung cấp cần cập nhật
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vendor_name:
+                  type: string
+                contact_info:
+                  $ref: '#/components/schemas/VendorContactInfo'
+      responses:
+        200:
+          description: Cập nhật vendor thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Vendor'
+        400:
+          description: Thiếu dữ liệu cập nhật hợp lệ
+        404:
+          description: Không tìm thấy vendor
+        500:
+          description: Lỗi server
+
+  /api/vendors/deleteVendor/{vendor_id}:
+    delete:
+      summary: Xóa vendor theo vendor_id
+      tags: [Vendors]
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: vendor_id
+          required: true
+          schema:
+            type: string
+          description: Mã nhà cung cấp cần xóa
+      responses:
+        200:
+          description: Xóa vendor thành công
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Vendor'
+        404:
+          description: Không tìm thấy vendor
+        500:
+          description: Lỗi server
+
+components:
+  schemas:
+    VendorContactInfo:
+      type: object
+      properties:
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+    Vendor:
+      type: object
+      properties:
+        _id:
+          type: string
+        vendor_id:
+          type: string
+        vendor_name:
+          type: string
+        contact_info:
+          $ref: '#/components/schemas/VendorContactInfo'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time

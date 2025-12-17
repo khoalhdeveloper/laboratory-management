@@ -123,6 +123,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  html, body {
+    overflow-x: hidden;
+    width: 100%;
+  }
 }
 
 /* Custom animations for EventLog component */
@@ -167,4 +171,7 @@
 
 .animate-pulse-slow {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.mirror {
+  transform: scaleX(-1);
 }

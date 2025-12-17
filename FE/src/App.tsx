@@ -1,12 +1,11 @@
 import Router from "./router/Router"
-import ToastContainer from "./source/page/Doctor/ToastContainer"
+import { GlobalThemeProvider } from "./contexts/GlobalThemeContext"
 
 function App() {
   return (
-    <>
+    <GlobalThemeProvider>
       <Router />
-      <ToastContainer />
-    </>
+    </GlobalThemeProvider>
   )
 }
 

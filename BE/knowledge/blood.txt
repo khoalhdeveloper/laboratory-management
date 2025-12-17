@@ -1,0 +1,78 @@
+Blood Test (Complete Blood Count - CBC)
+========================================
+
+Description:
+The CBC test measures various components of the blood to help assess overall health and detect medical conditions such as anemia, infection, and many other disorders.
+
+Parameters:
+
+1. White Blood Cell Count (WBC)
+   - Description: Measures the number of white blood cells (leukocytes) in the blood, which helps fight infection.
+   - Normal Range: 4,000–10,000 cells/µL
+
+2. Red Blood Cell Count (RBC)
+   - Description: Measures the number of red blood cells per unit of blood, responsible for carrying oxygen.
+   - Normal Range:
+     - Male: 4.7–6.1 million/µL
+     - Female: 4.2–5.4 million/µL
+
+3. Hemoglobin (Hb/HGB)
+   - Description: Protein in red blood cells that carries oxygen.
+   - Normal Range:
+     - Male: 14–18 g/dL
+     - Female: 12–16 g/dL
+
+4. Hematocrit (HCT)
+   - Description: Percentage of red blood cells in blood volume.
+   - Normal Range:
+     - Male: 42–52%
+     - Female: 37–47%
+
+5. Platelet Count (PLT)
+   - Description: Number of platelets in the blood, responsible for clotting.
+   - Normal Range: 150,000–350,000 cells/µL
+
+6. Mean Corpuscular Volume (MCV)
+   - Description: Average size of red blood cells.
+   - Normal Range: 80–100 fL
+
+7. Mean Corpuscular Hemoglobin (MCH)
+   - Description: Average amount of hemoglobin per red blood cell.
+   - Normal Range: 27–33 pg
+
+8. Mean Corpuscular Hemoglobin Concentration (MCHC)
+   - Description: Average concentration of hemoglobin in red blood cells.
+   - Normal Range: 32–36 g/dL
+
+Clinical Significance:
+
+- WBC (High): May indicate infection, inflammation, leukemia, or immune system disorder
+- WBC (Low): May indicate bone marrow disorder, autoimmune disease, or viral infection
+- RBC (Low): May indicate anemia, bleeding, bone marrow disorder, or nutritional deficiency
+- RBC (High): May indicate dehydration, lung disease, or polycythemia
+- Hemoglobin (Low): Indicates anemia, may cause fatigue, weakness, and shortness of breath
+- Hemoglobin (High): May indicate dehydration, lung disease, or living at high altitude
+- Hematocrit (Low): Indicates anemia or blood loss
+- Hematocrit (High): May indicate dehydration or polycythemia
+- Platelets (Low): May indicate bleeding disorder, bone marrow disorder, or immune system problem
+- Platelets (High): May indicate inflammation, infection, or bone marrow disorder
+- MCV (Low - Microcytic): Suggests iron deficiency anemia or thalassemia
+- MCV (High - Macrocytic): Suggests vitamin B12 or folate deficiency, liver disease, or alcoholism
+- MCH (Low): Indicates hypochromic anemia, often with iron deficiency
+- MCH (High): May indicate macrocytic anemia
+- MCHC (Low): Indicates hypochromic anemia
+- MCHC (High): Rare, may indicate hereditary spherocytosis or severe dehydration
+
+Anemia Classification by MCV:
+- Microcytic (MCV < 80 fL): Iron deficiency, thalassemia, chronic disease
+- Normocytic (MCV 80-100 fL): Acute blood loss, hemolysis, chronic kidney disease
+- Macrocytic (MCV > 100 fL): B12/folate deficiency, liver disease, hypothyroidism
+
+When to Test:
+- Routine health screening
+- Suspected anemia (fatigue, weakness, pale skin)
+- Suspected infection (fever, inflammation)
+- Monitoring chronic conditions (kidney disease, cancer)
+- Pre-operative assessment
+- Monitoring treatment effects (chemotherapy, medications)
+- Unexplained bruising or bleeding

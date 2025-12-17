@@ -1,12 +1,13 @@
 const express = require('express');
-const { getRolePrivileges, updateRolePrivileges } = require('../controllers/roles.controller');
-
 const router = express.Router();
+const rolesController = require('../controllers/roles.controller');
+const { verifyToken, authorizeRole } = require('../middlewares/auth.middleware');
 
-// Get role privileges by code
-router.get('/get-roles/:roleCode', getRolePrivileges);
 
-// Update role privileges by code
-router.put('/update-roles/:roleCode', updateRolePrivileges);
+router.get('/get-roles/:roleCode', verifyToken, authorizeRole(['admin']), rolesController.getRolePrivileges);
+router.put('/update-roles/:roleCode', verifyToken, authorizeRole(['admin']), rolesController.updateRolePrivileges);
+
+
+
 
 module.exports = router;

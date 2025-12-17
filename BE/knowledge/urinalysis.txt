@@ -1,0 +1,58 @@
+Urinalysis Test
+================
+
+Description:
+A urinalysis is a test that analyzes the physical, chemical, and microscopic components of urine. It helps assess overall health and detect a wide range of medical conditions, kidney infections, kidney disease, and diabetes.
+
+Parameters:
+
+1. Leukocytes (LEU)
+   - Description: Measures the presence of white blood cells (leukocytes) in the urine, which can indicate an infection.
+   - Normal Range: Negative or 10-25 Leu/µL
+
+2. Nitrite (NIT)
+   - Description: Detects nitrites, which are often produced by bacteria, a sign of a urinary tract infection (UTI).
+   - Normal Range: Negative
+
+3. Protein (PRO)
+   - Description: Measures the amount of protein (primarily albumin) in the urine. High levels can indicate kidney problems.
+   - Normal Range: Negative or 7.5-20 mg/dL
+
+4. pH
+   - Description: Measures the acidity or alkalinity of the urine, which can be affected by diet, medications, or disease.
+   - Normal Range: 4.6-8.0
+
+5. Blood (BLD)
+   - Description: Detects the presence of red blood cells (erythrocytes) in the urine, suggesting potential bleeding or damage.
+   - Normal Range: Negative or 0.015-0.062 mg/dL
+
+6. Specific Gravity (SG)
+   - Description: Measures the concentration (density) of the urine, indicating hydration status or kidney function.
+   - Normal Range: 1.005-1.030
+
+7. Ketones (KET)
+   - Description: Measures ketones, substances produced when the body burns fat for energy; high levels can be a sign of uncontrolled diabetes.
+   - Normal Range: Negative or 2.5-5 mg/dL
+
+8. Glucose (GLU)
+   - Description: Measures the amount of sugar (glucose) in the urine. High levels are commonly a sign of diabetes.
+   - Normal Range: Negative or 50-100 mg/dL
+
+Clinical Significance:
+
+- Leukocytes (High): May indicate urinary tract infection (UTI), kidney infection
+- Nitrite (Positive): Strong indicator of bacterial UTI
+- Protein (High): May indicate kidney disease, diabetes, high blood pressure
+- pH (Abnormal): Very low pH may indicate metabolic acidosis; very high pH may suggest UTI
+- Blood (Positive): May indicate kidney stones, infection, trauma, or kidney disease
+- Specific Gravity (Low): May indicate diabetes insipidus or excess fluid intake
+- Specific Gravity (High): May indicate dehydration or heart failure
+- Ketones (High): May indicate uncontrolled diabetes, starvation, or low-carb diet
+- Glucose (Positive): Strong indicator of diabetes mellitus
+
+When to Test:
+- Routine health screening
+- Suspected urinary tract infection
+- Monitoring kidney disease or diabetes
+- Symptoms like frequent urination, pain, or blood in urine
+- Pre-operative assessment

@@ -1,1328 +1,1328 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Package, 
-  Truck, 
-  Calendar, 
-  User, 
-  Search, 
-  Filter,
+  Search,
   Download,
   Eye,
   Clock,
-  Building2,
-  Beaker,
-  Plus,
-  Edit,
-  Trash2,
-  X,
-  Save,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
+  Activity,
   BarChart3,
   TrendingUp,
-  Activity
+  Package,
+  Beaker,
+  Building2,
+  AlertTriangle,
+  CheckCircle,
+  AlertCircle,
+  Calendar,
+  XCircle
 } from 'lucide-react';
 import { exportReagentData } from '../../../utils/exportUtils';
 import { toast } from '../../../utils/toast';
+import { useGlobalTheme } from '../../../contexts/GlobalThemeContext';
+import { api } from '../Axios/Axios';
 
-interface ReagentSupply {
-  id: string;
-  reagentName: string;
-  catalogNumber: string;
-  manufacturer: string;
-  casNumber?: string;
-  vendorName: string;
-  vendorId: string;
-  poNumber: string;
-  orderDate: string;
-  receiptDate: string;
-  quantityReceived: number;
-  unitOfMeasure: string;
-  lotNumber: string;
-  expirationDate: string;
-  receivedBy: string;
-  receiptDateTime: string;
-  storageLocation: string;
-  status: 'Received' | 'Partial Shipment' | 'Returned';
+// Types for Usage only (nurse chỉ xem usage)
+interface ReagentUsage {
+  _id: string;
+  reagent_name: string;
+  quantity_used: number;
+  used_by: string;
+  role: string;
+  used_at: string;
+  notes?: string;
+  instrument_id?: string;
+  instrument_name?: string;
+  procedure?: string;
+  used_for?: string;
+  created_at: string;
+  updated_at: string;
 }
 
-interface ReagentUsage {
-  id: string;
-  reagentName: string;
-  catalogNumber: string;
-  lotNumber: string;
-  quantityUsed: number;
-  unitOfMeasure: string;
-  usageDate: string;
-  usageTime: string;
-  usedBy: string;
-  purpose: string;
-  testId?: string;
-  remainingQuantity: number;
-  status: 'Used' | 'Consumed' | 'Expired';
+interface Batch {
+  lot_number: string;
+  quantity: number;
+  expiration_date: string;
+  supply_id: string;
+  storage_location?: string;
+  received_date: string;
+}
+
+interface Reagent {
+  _id: string;
+  reagent_name: string;
+  catalog_number?: string;
+  manufacturer?: string;
+  cas_number?: string;
+  description?: string;
+  quantity_available: number;
+  unit: string;
+  nearest_expiration_date?: string;
+  batch_count?: number;
+  expiring_soon_count?: number;
+  expired_count?: number;
+  expiring_soon_quantity?: number;
+  expired_quantity?: number;
+  batches?: Batch[];
 }
 
 const ReagentHistory: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'supply' | 'usage'>('supply');
+  const { isDarkMode } = useGlobalTheme();
+  // Nurse có cả tab usage và reagents
+  const [activeTab, setActiveTab] = useState<'usage' | 'reagents'>('usage');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('');
-  const [vendorFilter, setVendorFilter] = useState('');
+  const [instrumentFilter, setInstrumentFilter] = useState('');
+  const [reagentNameFilter, setReagentNameFilter] = useState('');
 
-  // Add CSS animations for modal (matching EventLog styles)
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes modalSlideIn {
-        from {
-          opacity: 0;
-          transform: scale(0.95) translateY(-10px);
-        }
-        to {
-          opacity: 1;
-          transform: scale(1) translateY(0);
-        }
-      }
-    `;
-    document.head.appendChild(style);
-    
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-  
-  // CRUD States
+  // Modal states - chỉ cho view
   const [showModal, setShowModal] = useState(false);
-  const [modalType, setModalType] = useState<'add' | 'edit' | 'view' | 'delete'>('add');
-  const [selectedItem, setSelectedItem] = useState<ReagentSupply | ReagentUsage | null>(null);
-  const [editFormData, setEditFormData] = useState<any>({});
+  const [selectedItem, setSelectedItem] = useState<ReagentUsage | Reagent | null>(null);
 
+  // API Data States
+  const [usageHistory, setUsageHistory] = useState<ReagentUsage[]>([]);
+  const [reagentList, setReagentList] = useState<Reagent[]>([]);
+  const [instrumentList, setInstrumentList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedReagentBatches, setSelectedReagentBatches] = useState<Batch[]>([]);
   
   // Stats for dashboard view
   const [showStats, setShowStats] = useState(true);
 
-  // Mock data for Reagent Supply History
-  const supplyHistory: ReagentSupply[] = [
-    {
-      id: 'SUP001',
-      reagentName: 'Glucose Test Solution',
-      catalogNumber: 'GTS-2024-001',
-      manufacturer: 'BioMed Labs',
-      casNumber: '50-99-7',
-      vendorName: 'MedSupply Corp',
-      vendorId: 'VEN001',
-      poNumber: 'PO-2024-0156',
-      orderDate: '2024-10-01',
-      receiptDate: '2024-10-05',
-      quantityReceived: 50,
-      unitOfMeasure: 'bottles',
-      lotNumber: 'LOT-24-10-001',
-      expirationDate: '2025-10-05',
-      receivedBy: 'Dr. Sarah Johnson',
-      receiptDateTime: '2024-10-05 09:30:00',
-      storageLocation: 'Cold Storage A-1',
-      status: 'Received'
-    },
-    {
-      id: 'SUP002',
-      reagentName: 'Blood Count Reagent',
-      catalogNumber: 'BCR-2024-002',
-      manufacturer: 'LabTech Solutions',
-      casNumber: '7732-18-5',
-      vendorName: 'Scientific Supplies Ltd',
-      vendorId: 'VEN002',
-      poNumber: 'PO-2024-0157',
-      orderDate: '2024-09-28',
-      receiptDate: '2024-10-03',
-      quantityReceived: 25,
-      unitOfMeasure: 'vials',
-      lotNumber: 'LOT-24-09-028',
-      expirationDate: '2025-09-28',
-      receivedBy: 'Dr. Michael Chen',
-      receiptDateTime: '2024-10-03 14:15:00',
-      storageLocation: 'Room Temperature B-2',
-      status: 'Partial Shipment'
+  // Load usage history
+  const loadUsageHistory = async () => {
+    try {
+      setLoading(true);
+      
+      const response = await api.get('/reagent-usage/history');
+      console.log('Usage history response:', response.data);
+      
+      if (response.data && response.data.data) {
+        console.log('Sample usage record:', response.data.data[0]);
+        console.log('All available fields:', Object.keys(response.data.data[0] || {}));
+        console.log('Test order ID field:', response.data.data[0]?.test_order_id);
+        setUsageHistory(response.data.data);
+      } else {
+        setUsageHistory([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading usage history:', error);
+      toast.error('Failed to load usage history');
+      setUsageHistory([]);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  // Mock data for Reagent Usage History
-  const usageHistory: ReagentUsage[] = [
-    {
-      id: 'USE001',
-      reagentName: 'Glucose Test Solution',
-      catalogNumber: 'GTS-2024-001',
-      lotNumber: 'LOT-24-10-001',
-      quantityUsed: 5,
-      unitOfMeasure: 'ml',
-      usageDate: '2024-10-08',
-      usageTime: '10:30:00',
-      usedBy: 'Dr. Sarah Johnson',
-      purpose: 'Blood Glucose Test - Patient ID: PT001',
-      testId: 'TST-2024-1001',
-      remainingQuantity: 45,
-      status: 'Used'
-    },
-    {
-      id: 'USE002',
-      reagentName: 'Blood Count Reagent',
-      catalogNumber: 'BCR-2024-002',
-      lotNumber: 'LOT-24-09-028',
-      quantityUsed: 3,
-      unitOfMeasure: 'ml',
-      usageDate: '2024-10-07',
-      usageTime: '15:45:00',
-      usedBy: 'Dr. Michael Chen',
-      purpose: 'Complete Blood Count - Patient ID: PT002',
-      testId: 'TST-2024-1002',
-      remainingQuantity: 22,
-      status: 'Used'
+  const loadReagents = async () => {
+    try {
+      const response = await api.get('/reagents/getAllReagents');
+      if (response.data.success) {
+        // Process reagents to handle MongoDB Decimal128
+        const processedReagents = (response.data.data || []).map((reagent: any) => ({
+          ...reagent,
+          quantity_available: typeof reagent.quantity_available === 'object' && reagent.quantity_available?.$numberDecimal 
+            ? parseFloat(reagent.quantity_available.$numberDecimal) 
+            : reagent.quantity_available || 0,
+          batch_count: typeof reagent.batch_count === 'object' && reagent.batch_count?.$numberDecimal
+            ? parseInt(reagent.batch_count.$numberDecimal)
+            : reagent.batch_count || 0,
+          expiring_soon_count: typeof reagent.expiring_soon_count === 'object' && reagent.expiring_soon_count?.$numberDecimal
+            ? parseInt(reagent.expiring_soon_count.$numberDecimal)
+            : reagent.expiring_soon_count || 0,
+          expired_count: typeof reagent.expired_count === 'object' && reagent.expired_count?.$numberDecimal
+            ? parseInt(reagent.expired_count.$numberDecimal)
+            : reagent.expired_count || 0,
+          expiring_soon_quantity: typeof reagent.expiring_soon_quantity === 'object' && reagent.expiring_soon_quantity?.$numberDecimal
+            ? parseFloat(reagent.expiring_soon_quantity.$numberDecimal)
+            : reagent.expiring_soon_quantity || 0,
+          expired_quantity: typeof reagent.expired_quantity === 'object' && reagent.expired_quantity?.$numberDecimal
+            ? parseFloat(reagent.expired_quantity.$numberDecimal)
+            : reagent.expired_quantity || 0
+        }));
+        setReagentList(processedReagents);
+      } else {
+        setReagentList([]);
+      }
+    } catch (error) {
+      console.error('Error loading reagents:', error);
+      setReagentList([]);
     }
-  ];
-
-  // CRUD Functions
-  const handleAdd = () => {
-    setModalType('add');
-    setSelectedItem(null);
-    setEditFormData({});
-    setShowModal(true);
   };
 
-  const handleEdit = (item: ReagentSupply | ReagentUsage) => {
-    setModalType('edit');
+  const loadInstruments = async () => {
+    try {
+      const response = await api.get('/instruments/getAllinstrument');
+      
+      if (response.data && response.data.instruments) {
+        setInstrumentList(response.data.instruments);
+      } else {
+        setInstrumentList([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading instruments:', error);
+      setInstrumentList([]);
+    }
+  };
+
+  // Load data on component mount and tab change
+  useEffect(() => {
+    const loadAllData = async () => {
+      if (activeTab === 'usage') {
+        await Promise.all([
+          loadUsageHistory(),
+          loadReagents(),
+          loadInstruments()
+        ]);
+      } else if (activeTab === 'reagents') {
+        await loadReagentsForTab();
+      }
+    };
+    loadAllData();
+  }, [activeTab]);
+
+  // View function (chỉ xem, không chỉnh sửa)
+  const handleView = async (item: ReagentUsage | Reagent) => {
     setSelectedItem(item);
-    setEditFormData({...item});
+    
+    // Load batches if viewing reagent
+    if ('quantity_available' in item) {
+      try {
+        setLoading(true);
+        // Load batches for this reagent from supply records
+        const response = await api.get('/reagent-supply/getAllSupplyRecords');
+        
+        if (response.data?.success) {
+          const allSupplyRecords = response.data.data?.records || response.data.data || [];
+          
+          // Filter batches for this specific reagent
+          const reagentBatches = allSupplyRecords
+            .filter((record: any) => 
+              record.reagent_name && 
+              record.reagent_name.toLowerCase() === item.reagent_name.toLowerCase()
+            )
+            .map((record: any) => ({
+              lot_number: record.lot_number || 'N/A',
+              quantity: typeof record.quantity_received === 'object' && record.quantity_received?.$numberDecimal 
+                ? parseFloat(record.quantity_received.$numberDecimal)
+                : record.quantity_received || 0,
+              expiration_date: record.expiration_date,
+              supply_id: record._id,
+              storage_location: record.storage_location,
+              received_date: record.receipt_date || record.created_at
+            }));
+          
+          // Remove duplicates based on lot_number, expiration_date, and storage_location
+          const uniqueBatches = reagentBatches.filter((batch: any, index: number, self: any[]) => 
+            index === self.findIndex((b: any) => 
+              b.lot_number === batch.lot_number && 
+              b.expiration_date === batch.expiration_date &&
+              b.storage_location === batch.storage_location
+            )
+          );
+          
+          setSelectedReagentBatches(uniqueBatches);
+        } else {
+          setSelectedReagentBatches([]);
+        }
+      } catch (error) {
+        console.error('Error loading batches:', error);
+        setSelectedReagentBatches([]);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setSelectedReagentBatches([]);
+    }
+    
     setShowModal(true);
   };
 
-  const handleView = (item: ReagentSupply | ReagentUsage) => {
-    setModalType('view');
-    setSelectedItem(item);
-    setShowModal(true);
+  // Load reagents list for reagents tab
+  const loadReagentsForTab = async () => {
+    try {
+      setLoading(true);
+      const response = await api.get('/reagents/getAllReagents');
+      
+      if (response.data?.success && response.data?.data) {
+        const processedReagents = response.data.data.map((reagent: any) => ({
+          ...reagent,
+          quantity_available: typeof reagent.quantity_available === 'object' && reagent.quantity_available?.$numberDecimal 
+            ? parseFloat(reagent.quantity_available.$numberDecimal) 
+            : reagent.quantity_available || 0,
+          batch_count: typeof reagent.batch_count === 'object' && reagent.batch_count?.$numberDecimal
+            ? parseInt(reagent.batch_count.$numberDecimal)
+            : reagent.batch_count || 0,
+          expiring_soon_count: typeof reagent.expiring_soon_count === 'object' && reagent.expiring_soon_count?.$numberDecimal
+            ? parseInt(reagent.expiring_soon_count.$numberDecimal)
+            : reagent.expiring_soon_count || 0,
+          expired_count: typeof reagent.expired_count === 'object' && reagent.expired_count?.$numberDecimal
+            ? parseInt(reagent.expired_count.$numberDecimal)
+            : reagent.expired_count || 0,
+          expiring_soon_quantity: typeof reagent.expiring_soon_quantity === 'object' && reagent.expiring_soon_quantity?.$numberDecimal
+            ? parseFloat(reagent.expiring_soon_quantity.$numberDecimal)
+            : reagent.expiring_soon_quantity || 0,
+          expired_quantity: typeof reagent.expired_quantity === 'object' && reagent.expired_quantity?.$numberDecimal
+            ? parseFloat(reagent.expired_quantity.$numberDecimal)
+            : reagent.expired_quantity || 0
+        }));
+        setReagentList(processedReagents);
+      } else {
+        setReagentList([]);
+      }
+    } catch (error: any) {
+      console.error('Error loading reagents:', error);
+      toast.error('Failed to load reagents');
+      setReagentList([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDelete = (item: ReagentSupply | ReagentUsage) => {
-    setModalType('delete');
-    setSelectedItem(item);
-    setShowModal(true);
-  };
-
-  // Export functions
+  // Export function
   const handleExport = async (format: 'excel' | 'pdf') => {
     try {
-      const dataToExport = activeTab === 'supply' ? filteredSupplyHistory : filteredUsageHistory;
-      // Convert to generic format for export
-      const exportData = dataToExport.map(item => ({
-        id: item.id,
-        lotNumber: 'lotNumber' in item ? item.lotNumber : '',
-        supplier: 'vendorName' in item ? item.vendorName : '',
-        date: 'receiptDate' in item ? item.receiptDate : 'usageDate' in item ? item.usageDate : '',
-        quantity: 'quantityReceived' in item ? item.quantityReceived : 'quantityUsed' in item ? item.quantityUsed : 0,
-        type: activeTab,
-        status: item.status
-      }));
+      let exportData;
+      
+      if (activeTab === 'usage') {
+        exportData = filteredUsageHistory.map(usage => ({
+          'Reagent Name': usage.reagent_name,
+          'Quantity Used': usage.quantity_used,
+          'Used By': usage.used_by,
+          'Role': usage.role,
+          'Used At': new Date(usage.used_at).toLocaleDateString(),
+          'Instrument': usage.instrument_name || 'N/A',
+          'Used For': usage.used_for || 'N/A',
+          'Procedure': usage.procedure || 'N/A',
+          'Notes': usage.notes || 'N/A'
+        }));
+      } else {
+        exportData = filteredReagentList.map(reagent => ({
+          'Reagent Name': reagent.reagent_name,
+          'Catalog Number': reagent.catalog_number || 'N/A',
+          'Manufacturer': reagent.manufacturer || 'N/A',
+          'CAS Number': reagent.cas_number || 'N/A',
+          'Available Quantity': reagent.quantity_available,
+          'Unit': reagent.unit,
+          'Description': reagent.description || 'N/A'
+        }));
+      }
       
       const result = exportReagentData(exportData, format);
       if (result.success) {
-        toast.success(`Reagent data exported to ${format.toUpperCase()} successfully!`);
+        toast.success(`${activeTab} data exported to ${format.toUpperCase()} successfully!`);
       } else {
-        toast.error(result.message);
+        toast.error('Failed to export data');
       }
     } catch (error) {
-      toast.error(`Failed to export reagent data to ${format.toUpperCase()}`);
+      toast.error(`Failed to export ${activeTab} data to ${format.toUpperCase()}`);
       console.error('Export error:', error);
     }
   };
 
   // Filter functions
-  const filteredSupplyHistory = supplyHistory.filter(supply => {
+  const filteredUsageHistory = Array.isArray(usageHistory) ? usageHistory.filter(usage => {
     const matchSearch = searchTerm === '' || 
-      supply.reagentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supply.catalogNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supply.manufacturer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supply.vendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supply.lotNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      usage.reagent_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      usage.used_by?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (usage.used_for && usage.used_for.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (usage.procedure && usage.procedure.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (usage.notes && usage.notes.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchDate = dateFilter === '' || supply.receiptDate === dateFilter;
+    const matchDate = dateFilter === '' || usage.used_at?.split('T')[0] === dateFilter;
     
-    const matchVendor = vendorFilter === '' || supply.vendorName === vendorFilter;
+    const matchReagentName = reagentNameFilter === '' || usage.reagent_name === reagentNameFilter;
     
-    return matchSearch && matchDate && matchVendor;
-  });
+    const matchInstrumentName = instrumentFilter === '' || usage.instrument_name === instrumentFilter || usage.instrument_id === instrumentFilter;
+    
+    return matchSearch && matchDate && matchReagentName && matchInstrumentName;
+  }) : [];
 
-  const filteredUsageHistory = usageHistory.filter(usage => {
-    const matchSearch = searchTerm === '' || 
-      usage.reagentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      usage.catalogNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      usage.lotNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      usage.usedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      usage.purpose.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredReagentList = Array.isArray(reagentList) ? reagentList.filter(reagent => {
+    const matchSearch = searchTerm === '' ||
+      reagent.reagent_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reagent.catalog_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reagent.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      reagent.cas_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (reagent.description && reagent.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchDate = dateFilter === '' || usage.usageDate === dateFilter;
+    const matchReagentName = reagentNameFilter === '' || reagent.reagent_name === reagentNameFilter;
     
-    return matchSearch && matchDate;
-  });
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Received':
-      case 'Used':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'Partial Shipment':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Returned':
-      case 'Expired':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'Consumed':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'Received':
-      case 'Used':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'Partial Shipment':
-        return <AlertCircle className="h-4 w-4" />;
-      case 'Returned':
-      case 'Expired':
-        return <XCircle className="h-4 w-4" />;
-      case 'Consumed':
-        return <Activity className="h-4 w-4" />;
-      default:
-        return <AlertTriangle className="h-4 w-4" />;
-    }
-  };
+    return matchSearch && matchReagentName;
+  }) : [];
 
   // Calculate statistics
-  const supplyStats = {
-    total: supplyHistory.length,
-    received: supplyHistory.filter(s => s.status === 'Received').length,
-    partial: supplyHistory.filter(s => s.status === 'Partial Shipment').length,
-    returned: supplyHistory.filter(s => s.status === 'Returned').length,
+  const usageStats = {
+    total: Array.isArray(usageHistory) ? usageHistory.length : 0,
+    used: Array.isArray(usageHistory) ? usageHistory.length : 0,
+    thisMonth: Array.isArray(usageHistory) ? usageHistory.filter(u => new Date(u.used_at).getMonth() === new Date().getMonth()).length : 0,
+    thisWeek: Array.isArray(usageHistory) ? usageHistory.filter(u => {
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return new Date(u.used_at) >= weekAgo;
+    }).length : 0,
   };
 
-  const usageStats = {
-    total: usageHistory.length,
-    used: usageHistory.filter(u => u.status === 'Used').length,
-    consumed: usageHistory.filter(u => u.status === 'Consumed').length,
-    expired: usageHistory.filter(u => u.status === 'Expired').length,
+  const reagentStats = {
+    total: Array.isArray(reagentList) ? reagentList.length : 0,
+    available: Array.isArray(reagentList) ? reagentList.filter(r => r.quantity_available > 0).length : 0,
+    lowStock: Array.isArray(reagentList) ? reagentList.filter(r => r.quantity_available > 0 && r.quantity_available < 100).length : 0,
+    outOfStock: Array.isArray(reagentList) ? reagentList.filter(r => r.quantity_available === 0).length : 0,
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-sm p-6 border border-blue-100">
-        <div className="flex items-center justify-between">
+      <div className={`rounded-lg sm:rounded-xl shadow-sm p-4 sm:p-6 border transition-colors duration-300 ${
+        isDarkMode 
+          ? 'bg-gradient-to-r from-gray-800 to-gray-900 border-gray-700' 
+          : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100'
+      }`}>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-blue-600 rounded-lg">
-                <Beaker className="h-8 w-8 text-white" />
-              </div>
-              Reagent History Tracing
+            <h1 className={`text-2xl sm:text-3xl font-bold ${
+              isDarkMode ? 'text-white' : 'text-gray-900'
+            }`}>
+              Reagent Management
             </h1>
-            <p className="text-gray-600 mt-2 text-lg">Track reagent supply and usage history for compliance and audit purposes</p>
+            <p className={`text-sm sm:text-base mt-2 ${
+              isDarkMode ? 'text-gray-300' : 'text-gray-600'
+            }`}>
+              View reagent usage records and reagents inventory (Read-only for Nurses)
+            </p>
           </div>
-          <div className="flex gap-3">
+          
+          <div className="flex flex-wrap gap-2">
             <button 
               onClick={() => setShowStats(!showStats)}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors border border-gray-200"
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                isDarkMode
+                  ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+              }`}
             >
               <BarChart3 className="h-4 w-4" />
-              {showStats ? 'Hide Stats' : 'Show Stats'}
+              <span className="hidden sm:inline">{showStats ? 'Hide' : 'Show'} Stats</span>
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-md">
-              <Plus className="h-4 w-4" />
-              Add Record
+            <button 
+              onClick={() => handleExport('excel')}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                isDarkMode
+                  ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export Excel</span>
             </button>
-            <div className="relative group">
-              <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md">
-                <Download className="h-4 w-4" />
-                Export
-              </button>
-              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 min-w-[120px]">
-                <button 
-                  onClick={() => handleExport('excel')}
-                  className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-t-lg"
-                >
-                  Export Excel
-                </button>
-                <button 
-                  onClick={() => handleExport('pdf')}
-                  className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-b-lg"
-                >
-                  Export PDF
-                </button>
-              </div>
-            </div>
+            <button 
+              onClick={() => handleExport('pdf')}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors duration-300 ${
+                isDarkMode
+                  ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export PDF</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Statistics Cards */}
       {showStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {activeTab === 'supply' ? (
-            <>
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Supplies</p>
-                    <p className="text-2xl font-bold text-gray-900">{supplyStats.total}</p>
-                  </div>
-                  <div className="p-3 bg-blue-100 rounded-full">
-                    <Truck className="h-6 w-6 text-blue-600" />
-                  </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          {(activeTab === 'usage' ? [
+            {
+              title: 'Total Usage Records',
+              value: usageStats.total.toLocaleString(),
+              icon: Activity,
+              color: 'purple',
+              change: '+12% from last month'
+            },
+            {
+              title: 'Used This Month',
+              value: usageStats.thisMonth.toLocaleString(),
+              icon: TrendingUp,
+              color: 'blue',
+              change: '+8% from last month'
+            },
+            {
+              title: 'Used This Week',
+              value: usageStats.thisWeek.toLocaleString(),
+              icon: Clock,
+              color: 'green',
+              change: '+15% from last week'
+            },
+            {
+              title: 'Active Usage',
+              value: usageStats.used.toLocaleString(),
+              icon: BarChart3,
+              color: 'orange',
+              change: 'All records active'
+            }
+          ] : [
+            {
+              title: 'Total Reagents',
+              value: reagentStats.total.toLocaleString(),
+              icon: Beaker,
+              color: 'purple',
+              change: 'All reagents listed'
+            },
+            {
+              title: 'Available',
+              value: reagentStats.available.toLocaleString(),
+              icon: CheckCircle,
+              color: 'green',
+              change: 'In stock reagents'
+            },
+            {
+              title: 'Low Stock',
+              value: reagentStats.lowStock.toLocaleString(),
+              icon: AlertTriangle,
+              color: 'orange',
+              change: '< 100 units remaining'
+            },
+            {
+              title: 'Out of Stock',
+              value: reagentStats.outOfStock.toLocaleString(),
+              icon: Package,
+              color: 'red',
+              change: 'Need restocking'
+            }
+          ]).map((stat, index) => (
+            <div
+              key={index}
+              className={`rounded-lg sm:rounded-xl p-4 sm:p-6 border transition-all duration-300 hover:shadow-lg ${
+                isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className={`text-xs sm:text-sm font-medium ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-600'
+                  }`}>
+                    {stat.title}
+                  </p>
+                  <p className={`text-xl sm:text-2xl font-bold mt-1 ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    {stat.value}
+                  </p>
                 </div>
-                <div className="mt-2 flex items-center text-sm">
-                  <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                  <span className="text-green-600">+12% from last month</span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Received</p>
-                    <p className="text-2xl font-bold text-gray-900">{supplyStats.received}</p>
-                  </div>
-                  <div className="p-3 bg-green-100 rounded-full">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className="text-sm text-gray-500">Success rate: 85%</span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-yellow-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Partial Shipments</p>
-                    <p className="text-2xl font-bold text-gray-900">{supplyStats.partial}</p>
-                  </div>
-                  <div className="p-3 bg-yellow-100 rounded-full">
-                    <AlertCircle className="h-6 w-6 text-yellow-600" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className="text-sm text-gray-500">Pending completion</span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-red-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Returned</p>
-                    <p className="text-2xl font-bold text-gray-900">{supplyStats.returned}</p>
-                  </div>
-                  <div className="p-3 bg-red-100 rounded-full">
-                    <XCircle className="h-6 w-6 text-red-600" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className="text-sm text-gray-500">Quality issues</span>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total Usage</p>
-                    <p className="text-2xl font-bold text-gray-900">{usageStats.total}</p>
-                  </div>
-                  <div className="p-3 bg-purple-100 rounded-full">
-                    <Activity className="h-6 w-6 text-purple-600" />
-                  </div>
-                </div>
-                <div className="mt-2 flex items-center text-sm">
-                  <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-                  <span className="text-green-600">+8% from last week</span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Active Usage</p>
-                    <p className="text-2xl font-bold text-gray-900">{usageStats.used}</p>
-                  </div>
-                  <div className="p-3 bg-green-100 rounded-full">
-                    <CheckCircle className="h-6 w-6 text-green-600" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className="text-sm text-gray-500">Currently in use</span>
+                <div className={`p-2 sm:p-3 rounded-full ${
+                  stat.color === 'purple' ? 'bg-purple-100 text-purple-600' :
+                  stat.color === 'blue' ? 'bg-blue-100 text-blue-600' :
+                  stat.color === 'green' ? 'bg-green-100 text-green-600' :
+                  stat.color === 'orange' ? 'bg-orange-100 text-orange-600' :
+                  'bg-red-100 text-red-600'
+                }`}>
+                  <stat.icon className="h-5 w-5 sm:h-6 sm:w-6" />
                 </div>
               </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Consumed</p>
-                    <p className="text-2xl font-bold text-gray-900">{usageStats.consumed}</p>
-                  </div>
-                  <div className="p-3 bg-blue-100 rounded-full">
-                    <Package className="h-6 w-6 text-blue-600" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className="text-sm text-gray-500">Fully utilized</span>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-red-500">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Expired</p>
-                    <p className="text-2xl font-bold text-gray-900">{usageStats.expired}</p>
-                  </div>
-                  <div className="p-3 bg-red-100 rounded-full">
-                    <XCircle className="h-6 w-6 text-red-600" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <span className="text-sm text-gray-500">Needs disposal</span>
-                </div>
-              </div>
-            </>
-          )}
+              <p className={`text-xs mt-2 ${
+                isDarkMode ? 'text-gray-400' : 'text-gray-500'
+              }`}>
+                {stat.change}
+              </p>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Tab Navigation */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8 px-6">
-            <button
-              onClick={() => setActiveTab('supply')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-all duration-200 ${
-                activeTab === 'supply'
-                  ? 'border-blue-500 text-blue-600 bg-blue-50 rounded-t-lg'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t-lg'
-              }`}
-            >
-              <div className="flex items-center gap-3 px-3 py-1">
-                <div className={`p-1 rounded-full ${activeTab === 'supply' ? 'bg-blue-200' : 'bg-gray-200'}`}>
-                  <Truck className="h-4 w-4" />
-                </div>
-                <span className="font-semibold">Supply History</span>
-                <span className={`px-2 py-1 text-xs rounded-full ${activeTab === 'supply' ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-600'}`}>
-                  {supplyStats.total}
-                </span>
-              </div>
-            </button>
+      {/* Tabs Navigation */}
+      <div className={`rounded-lg sm:rounded-xl shadow-sm border transition-colors duration-300 ${
+        isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+      }`}>
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex space-x-1 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
             <button
               onClick={() => setActiveTab('usage')}
-              className={`py-4 px-2 border-b-2 font-medium text-sm transition-all duration-200 ${
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors duration-300 ${
                 activeTab === 'usage'
-                  ? 'border-purple-500 text-purple-600 bg-purple-50 rounded-t-lg'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50 rounded-t-lg'
+                  ? (isDarkMode ? 'bg-gray-600 text-white' : 'bg-white text-gray-900 shadow-sm')
+                  : (isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700')
               }`}
             >
-              <div className="flex items-center gap-3 px-3 py-1">
-                <div className={`p-1 rounded-full ${activeTab === 'usage' ? 'bg-purple-200' : 'bg-gray-200'}`}>
-                  <Package className="h-4 w-4" />
-                </div>
-                <span className="font-semibold">Usage History</span>
-                <span className={`px-2 py-1 text-xs rounded-full ${activeTab === 'usage' ? 'bg-purple-200 text-purple-800' : 'bg-gray-200 text-gray-600'}`}>
-                  {usageStats.total}
-                </span>
-              </div>
+              <Activity className="inline-block h-4 w-4 mr-2" />
+              Usage History
             </button>
-          </nav>
+            <button
+              onClick={() => setActiveTab('reagents')}
+              className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors duration-300 ${
+                activeTab === 'reagents'
+                  ? (isDarkMode ? 'bg-gray-600 text-white' : 'bg-white text-gray-900 shadow-sm')
+                  : (isDarkMode ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-gray-700')
+              }`}
+            >
+              <Beaker className="inline-block h-4 w-4 mr-2" />
+              Reagents
+            </button>
+          </div>
         </div>
+      </div>
 
-        {/* Filters & Actions */}
-        <div className="p-6 border-b border-gray-200 bg-gray-50">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="text"
-                  placeholder="Search reagents..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-4 py-3 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
-                />
-              </div>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <input
-                  type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="pl-10 pr-4 py-3 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm"
-                />
-              </div>
-              {activeTab === 'supply' && (
-                <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <select
-                    value={vendorFilter}
-                    onChange={(e) => setVendorFilter(e.target.value)}
-                    className="pl-10 pr-4 py-3 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white shadow-sm"
-                  >
-                    <option value="">All Vendors</option>
-                    <option value="MedSupply Corp">MedSupply Corp</option>
-                    <option value="Scientific Supplies Ltd">Scientific Supplies Ltd</option>
-                  </select>
-                </div>
-              )}
+      {/* Usage Table */}
+      {activeTab === 'usage' && (
+      <div className={`rounded-lg sm:rounded-xl shadow-sm border transition-colors duration-300 ${
+        isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+      }`}>
+        {/* Search and Filters */}
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder={activeTab === 'usage' ? "Search reagents, users, procedures, or notes..." : "Search reagent name, catalog number, manufacturer..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+              />
             </div>
+            {activeTab === 'usage' && (
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
+              }`}
+            />
+            )}
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            <select
+              value={reagentNameFilter}
+              onChange={(e) => setReagentNameFilter(e.target.value)}
+              className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
+              }`}
+            >
+              <option value="">All Reagents</option>
+              {reagentList.map(reagent => (
+                <option key={reagent._id} value={reagent.reagent_name}>
+                  {reagent.reagent_name}
+                </option>
+              ))}
+            </select>
             
-            <div className="flex gap-3">
-              <button className="flex items-center gap-2 px-4 py-3 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors border border-gray-300 shadow-sm">
-                <Filter className="h-4 w-4" />
-                Advanced Filters
-              </button>
-              {(searchTerm || dateFilter || vendorFilter) && (
-                <button 
-                  onClick={() => {
-                    setSearchTerm('');
-                    setDateFilter('');
-                    setVendorFilter('');
-                  }}
-                  className="flex items-center gap-2 px-4 py-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors border border-red-200 shadow-sm"
-                >
-                  <X className="h-4 w-4" />
-                  Clear Filters
-                </button>
-              )}
-              <button 
-                onClick={handleAdd}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-md font-medium"
-              >
-                <Plus className="h-4 w-4" />
-                Add New {activeTab === 'supply' ? 'Supply' : 'Usage'}
-              </button>
-            </div>
+            {activeTab === 'usage' && (
+            <select
+              value={instrumentFilter}
+              onChange={(e) => setInstrumentFilter(e.target.value)}
+              className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
+              }`}
+            >
+              <option value="">All Instruments</option>
+              {instrumentList.map(instrument => (
+                <option key={instrument.instrument_id} value={instrument.instrument_id}>
+                  {instrument.name}
+                </option>
+              ))}
+            </select>
+            )}
           </div>
         </div>
 
-        {/* Results Summary */}
-        {(searchTerm || dateFilter || vendorFilter) && (
-          <div className="px-6 py-3 bg-blue-50 border-b border-blue-100">
-            <p className="text-sm text-blue-700">
-              Showing <span className="font-semibold">
-                {activeTab === 'supply' ? filteredSupplyHistory.length : filteredUsageHistory.length}
-              </span> of <span className="font-semibold">
-                {activeTab === 'supply' ? supplyHistory.length : usageHistory.length}
-              </span> {activeTab === 'supply' ? 'supply' : 'usage'} records
-              {searchTerm && <span> matching "{searchTerm}"</span>}
-              {dateFilter && <span> for date {dateFilter}</span>}
-              {vendorFilter && <span> from vendor "{vendorFilter}"</span>}
-            </p>
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="p-6 bg-white">
-          {activeTab === 'supply' ? (
-            /* Supply History Table */
-            <div className="overflow-hidden shadow-sm border border-gray-200 rounded-xl">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        <div className="flex items-center gap-2">
-                          <Beaker className="h-4 w-4" />
-                          Reagent Information
-                        </div>
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-4 w-4" />
-                          Vendor Details
-                        </div>
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          Order Information
-                        </div>
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4" />
-                          Batch Information
-                        </div>
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredSupplyHistory.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center">
-                          <div className="text-gray-500">
-                            <Package className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">No supply records found</h3>
-                            <p className="text-sm">Try adjusting your search or filter criteria</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredSupplyHistory.map((supply) => (
-                      <tr key={supply.id} className="hover:bg-blue-50 transition-colors">
-                        <td className="px-6 py-5">
-                          <div className="space-y-1">
-                            <div className="text-sm font-semibold text-gray-900">{supply.reagentName}</div>
-                            <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block">Cat: {supply.catalogNumber}</div>
-                            <div className="text-xs text-blue-600 font-medium">Mfg: {supply.manufacturer}</div>
-                            {supply.casNumber && (
-                              <div className="text-xs text-gray-500">CAS: {supply.casNumber}</div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="space-y-1">
-                            <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              {supply.vendorName}
-                            </div>
-                            <div className="text-xs text-gray-500 bg-blue-50 px-2 py-1 rounded">ID: {supply.vendorId}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="space-y-1">
-                            <div className="text-sm font-medium text-gray-900">PO: {supply.poNumber}</div>
-                            <div className="text-xs text-gray-500">Ordered: {supply.orderDate}</div>
-                            <div className="text-xs text-green-600 font-medium">Received: {supply.receiptDate}</div>
-                            <div className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-medium">
-                              {supply.quantityReceived} {supply.unitOfMeasure}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="space-y-1">
-                            <div className="text-sm font-medium text-gray-900">Lot: {supply.lotNumber}</div>
-                            <div className="text-xs text-orange-600">Exp: {supply.expirationDate}</div>
-                            <div className="text-xs text-gray-500 flex items-center gap-1">
-                              <User className="h-3 w-3" />
-                              {supply.receivedBy}
-                            </div>
-                            <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">{supply.storageLocation}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(supply.status)}
-                            <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor(supply.status)}`}>
-                              {supply.status}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
-                            <button 
-                              onClick={() => handleView(supply)}
-                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-all duration-200 hover:scale-110"
-                              title="View Details"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleEdit(supply)}
-                              className="p-2 text-green-600 hover:text-green-800 hover:bg-green-100 rounded-lg transition-all duration-200 hover:scale-110"
-                              title="Edit"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(supply)}
-                              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition-all duration-200 hover:scale-110"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+        {/* Table */}
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : filteredUsageHistory.length === 0 ? (
+            <div className="text-center py-8">
+              <p className={`text-gray-500 ${isDarkMode ? 'text-gray-400' : ''}`}>
+                No usage records found
+              </p>
             </div>
           ) : (
-            /* Usage History Table */
-            <div className="overflow-hidden shadow-sm border border-gray-200 rounded-xl">
+            <table className="min-w-full">
+              <thead className={`${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                <tr>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                  }`}>
+                    Reagent Information
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                  }`}>
+                    Usage Details
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                  }`}>
+                    User Information
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                  }`}>
+                    Purpose & Test ID
+                  </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                    isDarkMode ? 'text-gray-300' : 'text-gray-500'
+                  }`}>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isDarkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                {filteredUsageHistory.map((usage) => (
+                  <tr key={usage._id} className={`hover:${isDarkMode ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                          {usage.reagent_name}
+                        </div>
+                        <div className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`}>
+                          Used: {usage.quantity_used}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <Activity className="h-5 w-5 text-purple-500 mr-2" />
+                        <div>
+                          <div className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {usage.instrument_name || 'N/A'}
+                          </div>
+                          <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'} flex items-center`}>
+                            <Clock className="h-3 w-3 mr-1" />
+                            {new Date(usage.used_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-8 w-8 bg-purple-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-purple-600">
+                            {usage.used_by.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="ml-3">
+                          <div className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                            {usage.used_by}
+                          </div>
+                          <div className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-500'}`}>
+                            {usage.role}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="space-y-1">
+                        {usage.used_for || usage.procedure ? (
+                          <div className="text-sm font-medium text-blue-700 bg-blue-100 px-3 py-2 rounded-lg border border-blue-200">
+                            <div className="font-semibold">{usage.used_for || usage.procedure}</div>
+                            {usage.procedure && usage.used_for && usage.procedure !== usage.used_for && (
+                              <div className="text-xs text-blue-600 mt-1">
+                                Procedure: {usage.procedure}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
+                            General Laboratory Use
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => handleView(usage)}
+                        className="text-blue-600 hover:text-blue-900 mr-3"
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+      )}
+
+      {/* Reagents Table */}
+      {activeTab === 'reagents' && (
+      <div className={`rounded-lg sm:rounded-xl shadow-sm border transition-colors duration-300 ${
+        isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'
+      }`}>
+        {/* Search and Filters for Reagents */}
+        <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <input
+                type="text"
+                placeholder="Search reagent name, catalog number, manufacturer..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+                }`}
+              />
+            </div>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4 mt-4">
+            <select
+              value={reagentNameFilter}
+              onChange={(e) => setReagentNameFilter(e.target.value)}
+              className={`px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-300 ${
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
+              }`}
+            >
+              <option value="">All Reagents</option>
+              {reagentList.map(reagent => (
+                <option key={reagent._id} value={reagent.reagent_name}>
+                  {reagent.reagent_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Reagents Table */}
+        <div className="overflow-x-auto">
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : filteredReagentList.length === 0 ? (
+            <div className="text-center py-8">
+              <p className={`text-gray-500 ${isDarkMode ? 'text-gray-400' : ''}`}>
+                No reagents found
+              </p>
+            </div>
+          ) : (
+            <div className={`overflow-hidden shadow-sm border rounded-xl transition-colors duration-300 ${
+              isDarkMode ? 'border-gray-700' : 'border-gray-200'
+            }`}>
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-purple-50 to-purple-100">
+                <table className={`min-w-full divide-y transition-colors duration-300 ${
+                  isDarkMode ? 'divide-gray-700' : 'divide-gray-200'
+                }`}>
+                  <thead className={`transition-colors duration-300 ${
+                    isDarkMode 
+                      ? 'bg-gradient-to-r from-indigo-900/30 to-indigo-800/30' 
+                      : 'bg-gradient-to-r from-indigo-50 to-indigo-100'
+                  }`}>
                     <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                         <div className="flex items-center gap-2">
                           <Beaker className="h-4 w-4" />
                           Reagent Information
                         </div>
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                         <div className="flex items-center gap-2">
-                          <Activity className="h-4 w-4" />
-                          Usage Details
+                          <Package className="h-4 w-4" />
+                          Inventory Details
                         </div>
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                         <div className="flex items-center gap-2">
-                          <User className="h-4 w-4" />
-                          User Information
+                          <Building2 className="h-4 w-4" />
+                          Manufacturer
                         </div>
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          Purpose & Test ID
+                          <AlertCircle className="h-4 w-4" />
+                          Status
                         </div>
                       </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      <th className={`px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider transition-colors duration-300 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredUsageHistory.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-6 py-12 text-center">
-                          <div className="text-gray-500">
-                            <Activity className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">No usage records found</h3>
-                            <p className="text-sm">Try adjusting your search or filter criteria</p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredUsageHistory.map((usage) => (
-                      <tr key={usage.id} className="hover:bg-purple-50 transition-colors">
-                        <td className="px-6 py-5">
-                          <div className="space-y-1">
-                            <div className="text-sm font-semibold text-gray-900">{usage.reagentName}</div>
-                            <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded inline-block">Cat: {usage.catalogNumber}</div>
-                            <div className="text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded font-medium">Lot: {usage.lotNumber}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <div className="text-sm font-medium text-red-600 bg-red-50 px-2 py-1 rounded">
-                                Used: {usage.quantityUsed} {usage.unitOfMeasure}
+                  <tbody className={`divide-y transition-colors duration-300 ${
+                    isDarkMode ? 'bg-gray-800 divide-gray-700' : 'bg-white divide-gray-200'
+                  }`}>
+                    {filteredReagentList.map((reagent) => (
+                      <tr key={reagent._id} className={`transition-colors duration-300 ${
+                        isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-indigo-50'
+                      }`}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className={`text-sm font-medium transition-colors duration-300 ${
+                              isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              {reagent.reagent_name}
+                            </div>
+                            {reagent.catalog_number && (
+                              <div className={`text-sm transition-colors duration-300 ${
+                                isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                              }`}>
+                                Cat#: {reagent.catalog_number}
                               </div>
-                            </div>
-                            <div className="text-sm text-green-600 bg-green-50 px-2 py-1 rounded font-medium">
-                              Remaining: {usage.remainingQuantity} {usage.unitOfMeasure}
-                            </div>
-                            <div className="text-xs text-gray-500 flex items-center gap-1 bg-gray-50 px-2 py-1 rounded">
-                              <Clock className="h-3 w-3" />
-                              {usage.usageDate} at {usage.usageTime}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-3">
-                            <div className="flex-shrink-0">
-                              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
-                                <User className="h-4 w-4 text-purple-600" />
-                              </div>
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">{usage.usedBy}</div>
-                              <div className="text-xs text-gray-500">Laboratory Staff</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="space-y-2">
-                            <div className="text-sm text-gray-900 p-2 bg-blue-50 rounded border-l-4 border-blue-400">
-                              {usage.purpose}
-                            </div>
-                            {usage.testId && (
-                              <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono font-medium">
-                                Test ID: {usage.testId}
+                            )}
+                            {reagent.cas_number && (
+                              <div className={`text-xs transition-colors duration-300 ${
+                                isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                              }`}>
+                                CAS: {reagent.cas_number}
                               </div>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(usage.status)}
-                            <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor(usage.status)}`}>
-                              {usage.status}
-                            </span>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div>
+                            <div className={`text-sm font-medium transition-colors duration-300 ${
+                              isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              {reagent.quantity_available} {reagent.unit}
+                            </div>
+                            <div className={`text-xs transition-colors duration-300 ${
+                              isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                            }`}>
+                              Available
+                            </div>
                           </div>
                         </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-2">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm transition-colors duration-300 ${
+                            isDarkMode ? 'text-gray-300' : 'text-gray-900'
+                          }`}>
+                            {reagent.manufacturer || 'N/A'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors duration-300 ${
+                            reagent.quantity_available > 10
+                              ? isDarkMode 
+                                ? 'bg-green-900/50 text-green-300 border-green-700' 
+                                : 'bg-green-100 text-green-800 border-green-200'
+                              : reagent.quantity_available > 0
+                                ? isDarkMode 
+                                  ? 'bg-yellow-900/50 text-yellow-300 border-yellow-700' 
+                                  : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                : isDarkMode 
+                                  ? 'bg-red-900/50 text-red-300 border-red-700' 
+                                  : 'bg-red-100 text-red-800 border-red-200'
+                          }`}>
+                            {reagent.quantity_available > 10 ? 'In Stock' : reagent.quantity_available > 0 ? 'Low Stock' : 'Out of Stock'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex justify-end gap-2">
                             <button 
-                              onClick={() => handleView(usage)}
-                              className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-all duration-200 hover:scale-110"
+                              onClick={() => handleView(reagent)}
+                              className={`p-2 text-blue-600 hover:text-blue-800 rounded-lg transition-all duration-200 hover:scale-110 ${
+                                isDarkMode ? 'hover:bg-blue-900/30' : 'hover:bg-blue-100'
+                              }`}
                               title="View Details"
                             >
                               <Eye className="h-4 w-4" />
                             </button>
-                            <button 
-                              onClick={() => handleEdit(usage)}
-                              className="p-2 text-green-600 hover:text-green-800 hover:bg-green-100 rounded-lg transition-all duration-200 hover:scale-110"
-                              title="Edit"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            <button 
-                              onClick={() => handleDelete(usage)}
-                              className="p-2 text-red-600 hover:text-red-800 hover:bg-red-100 rounded-lg transition-all duration-200 hover:scale-110"
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           </div>
                         </td>
                       </tr>
-                    ))
-                    )}
+                    ))}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
         </div>
+      </div>
+      )}
 
-        {/* Modal for CRUD Operations */}
-        {showModal && (
-          <div className="fixed inset-0 flex items-center justify-center z-50 p-4"
-               style={{
-                 backdropFilter: 'blur(8px)',
-                 WebkitBackdropFilter: 'blur(8px)',
-                 backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                 transition: 'all 300ms ease-out'
-               }}
-               onClick={(e) => {
-                 if (e.target === e.currentTarget) {
-                   setShowModal(false);
-                 }
-               }}>
-            <div className="bg-white rounded-xl p-8 w-full max-w-4xl transform max-h-[90vh] overflow-y-auto"
-                 style={{
-                   animation: 'modalSlideIn 0.3s ease-out',
-                   transformOrigin: 'center',
-                   boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                   border: '1px solid rgba(255, 255, 255, 0.1)'
-                 }}
-                 onClick={(e) => e.stopPropagation()}>
-              
-              {/* Modal Header */}
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-gradient-to-br from-indigo-100 to-indigo-200 rounded-full flex items-center justify-center shadow-lg">
-                    {modalType === 'view' ? (
-                      <Eye className="w-6 h-6 text-indigo-600" />
-                    ) : modalType === 'edit' ? (
-                      <Edit className="w-6 h-6 text-indigo-600" />
-                    ) : modalType === 'add' ? (
-                      <Plus className="w-6 h-6 text-indigo-600" />
-                    ) : (
-                      <AlertTriangle className="w-6 h-6 text-red-600" />
-                    )}
-                  </div>
+      {/* View Modal */}
+      {showModal && selectedItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
+          <div 
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowModal(false)}
+          />
+          
+          <div className={`relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-xl shadow-2xl ${
+            isDarkMode ? 'bg-gray-800' : 'bg-white'
+          }`}>
+            {/* Header */}
+            <div className={`flex items-center justify-between p-6 border-b ${
+              isDarkMode ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {'quantity_used' in selectedItem ? 'Usage Details' : 'Reagent Details'}
+              </h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                  isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                }`}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {'quantity_used' in selectedItem ? (
+                // Usage details
+                <div className="space-y-4">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900 capitalize">
-                      {modalType} {activeTab === 'supply' ? 'Supply' : 'Usage'} Record
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {modalType === 'view' ? 'Detailed information about the record' :
-                       modalType === 'edit' ? 'Modify the existing record' :
-                       modalType === 'add' ? 'Create a new record' :
-                       'Confirm deletion of this record'}
+                    <label className={`block text-sm font-medium mb-1 ${
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      Reagent Name
+                    </label>
+                    <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {selectedItem.reagent_name}
                     </p>
                   </div>
-                </div>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors duration-200 hover:shadow-md"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Modal Content */}
-              <div className="rounded-xl p-6 space-y-6"
-                   style={{
-                     background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)'
-                   }}>
-                {modalType === 'delete' ? (
-                  <div className="text-center">
-                    <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
-                      <AlertTriangle className="h-8 w-8 text-red-600" />
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Quantity Used
+                      </label>
+                      <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {selectedItem.quantity_used}
+                      </p>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-3">Delete Record</h3>
-                    <p className="text-gray-600 mb-8 text-lg">
-                      Are you sure you want to delete this record? This action cannot be undone.
-                    </p>
+                    
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Used By
+                      </label>
+                      <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {selectedItem.used_by}
+                      </p>
+                    </div>
                   </div>
-                ) : modalType === 'view' ? (
-                  <div className="space-y-6">
-                    <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200"
-                         style={{
-                           backdropFilter: 'blur(10px)',
-                           WebkitBackdropFilter: 'blur(10px)',
-                           background: 'rgba(255, 255, 255, 0.95)'
-                         }}>
-                      <h4 className="text-lg font-semibold text-gray-900 mb-4">Record Details</h4>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                        {selectedItem && Object.entries(selectedItem).map(([key, value]) => (
-                          <div key={key} className="bg-gradient-to-r from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
-                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">{key.replace(/([A-Z])/g, ' $1').trim()}</label>
-                            <div className="text-sm font-medium text-gray-900">{value?.toString() || 'N/A'}</div>
-                          </div>
-                        ))}
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Role
+                      </label>
+                      <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {selectedItem.role}
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Used At
+                      </label>
+                      <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {new Date(selectedItem.used_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {selectedItem.instrument_name && (
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Instrument
+                      </label>
+                      <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {selectedItem.instrument_name}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                    <label className={`block text-sm font-medium mb-2 ${
+                      isDarkMode ? 'text-blue-300' : 'text-blue-700'
+                    }`}>
+                      <span className="flex items-center gap-2">
+                        🧪 Usage Information
+                      </span>
+                    </label>
+                    <div className="space-y-2">
+                      <div>
+                        <p className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          Used For:
+                        </p>
+                        <p className={`text-base font-semibold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                          {selectedItem.used_for || 'General Use'}
+                        </p>
+                      </div>
+                      {selectedItem.procedure && selectedItem.procedure !== selectedItem.used_for && (
+                        <div>
+                          <p className={`text-sm font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                            Procedure:
+                          </p>
+                          <p className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                            {selectedItem.procedure}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {selectedItem.notes && (
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                      }`}>
+                        Notes
+                      </label>
+                      <p className={`text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {selectedItem.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Reagent details with batch information
+                <div className="space-y-6">
+                  {/* Batches section */}
+                  {selectedReagentBatches.length > 0 && (
+                    <div className={`rounded-lg p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                      isDarkMode 
+                        ? 'bg-gray-600 border-gray-500' 
+                        : 'bg-white border-gray-100'
+                    }`}>
+                      <h4 className={`text-lg font-semibold mb-4 flex items-center gap-2 transition-colors duration-300 ${
+                        isDarkMode ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        <Package className="h-5 w-5" />
+                        Batches & Expiration Dates ({selectedReagentBatches.length})
+                      </h4>
+                      <div className="space-y-3">
+                        {selectedReagentBatches.map((batch, index) => {
+                          const expirationDate = new Date(batch.expiration_date);
+                          const today = new Date();
+                          const daysUntilExpiry = Math.ceil((expirationDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                          const isExpired = daysUntilExpiry < 0;
+                          const isExpiringSoon = daysUntilExpiry >= 0 && daysUntilExpiry <= 30;
+                          
+                          return (
+                            <div key={index} className={`p-4 rounded-lg border transition-all duration-300 ${
+                              isExpired
+                                ? isDarkMode 
+                                  ? 'bg-red-900/20 border-red-700' 
+                                  : 'bg-red-50 border-red-200'
+                                : isExpiringSoon
+                                  ? isDarkMode 
+                                    ? 'bg-orange-900/20 border-orange-700' 
+                                    : 'bg-orange-50 border-orange-200'
+                                  : isDarkMode 
+                                    ? 'bg-gray-700 border-gray-600' 
+                                    : 'bg-gray-50 border-gray-200'
+                            }`}>
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 grid grid-cols-2 gap-3">
+                                  <div>
+                                    <label className={`text-xs font-medium transition-colors duration-300 ${
+                                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                                    }`}>Lot Number</label>
+                                    <p className={`text-sm font-semibold transition-colors duration-300 ${
+                                      isDarkMode ? 'text-white' : 'text-gray-900'
+                                    }`}>{batch.lot_number}</p>
+                                  </div>
+                                  <div>
+                                    <label className={`text-xs font-medium transition-colors duration-300 ${
+                                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                                    }`}>Quantity</label>
+                                    <p className={`text-sm font-semibold transition-colors duration-300 ${
+                                      isDarkMode ? 'text-white' : 'text-gray-900'
+                                    }`}>{batch.quantity} {selectedItem.unit}</p>
+                                  </div>
+                                  <div>
+                                    <label className={`text-xs font-medium transition-colors duration-300 ${
+                                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                                    }`}>Expiration Date</label>
+                                    <p className={`text-sm font-semibold flex items-center gap-2 transition-colors duration-300 ${
+                                      isExpired
+                                        ? 'text-red-600'
+                                        : isExpiringSoon
+                                          ? 'text-orange-600'
+                                          : isDarkMode ? 'text-white' : 'text-gray-900'
+                                    }`}>
+                                      <Calendar className="h-4 w-4" />
+                                      {expirationDate.toLocaleDateString('en-GB', {
+                                        year: 'numeric',
+                                        month: '2-digit',
+                                        day: '2-digit'
+                                      })}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <label className={`text-xs font-medium transition-colors duration-300 ${
+                                      isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                                    }`}>Received Date</label>
+                                    <p className={`text-sm transition-colors duration-300 ${
+                                      isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                                    }`}>
+                                      {new Date(batch.received_date).toLocaleDateString('en-GB', {
+                                        year: 'numeric',
+                                        month: '2-digit',
+                                        day: '2-digit'
+                                      })}
+                                    </p>
+                                  </div>
+                                  {batch.storage_location && (
+                                    <div className="col-span-2">
+                                      <label className={`text-xs font-medium transition-colors duration-300 ${
+                                        isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                                      }`}>Storage Location</label>
+                                      <p className={`text-sm transition-colors duration-300 ${
+                                        isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                                      }`}>{batch.storage_location}</p>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="ml-3">
+                                  {isExpired ? (
+                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors duration-300 ${
+                                      isDarkMode 
+                                        ? 'bg-red-900/50 text-red-300' 
+                                        : 'bg-red-100 text-red-800'
+                                    }`}>
+                                      <XCircle className="h-3 w-3" />
+                                      Expired
+                                    </span>
+                                  ) : isExpiringSoon ? (
+                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors duration-300 ${
+                                      isDarkMode 
+                                        ? 'bg-orange-900/50 text-orange-300' 
+                                        : 'bg-orange-100 text-orange-800'
+                                    }`}>
+                                      <AlertTriangle className="h-3 w-3" />
+                                      {daysUntilExpiry}d left
+                                    </span>
+                                  ) : (
+                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors duration-300 ${
+                                      isDarkMode 
+                                        ? 'bg-green-900/50 text-green-300' 
+                                        : 'bg-green-100 text-green-800'
+                                    }`}>
+                                      <CheckCircle className="h-3 w-3" />
+                                      Good
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200"
-                         style={{
-                           backdropFilter: 'blur(10px)',
-                           WebkitBackdropFilter: 'blur(10px)',
-                           background: 'rgba(255, 255, 255, 0.95)'
-                         }}>
-                      <h4 className="text-lg font-semibold text-green-900 mb-4">
-                        {modalType === 'add' ? 'Add New Record' : 'Edit Record'}
-                      </h4>
-                      <p className="text-green-700 mb-6">
-                        {modalType === 'add' ? 'Create a new' : 'Modify the existing'} {activeTab} record.
-                      </p>
-                      
-                      {/* Form Fields */}
-                      <form className="space-y-4">
-                        {activeTab === 'supply' ? (
-                          // Supply Form Fields
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Reagent Name</label>
-                              <input
-                                type="text"
-                                value={editFormData.reagentName || ''}
-                                onChange={(e) => setEditFormData({...editFormData, reagentName: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter reagent name"
-                              />
+                  )}
+
+                  {/* Record Details */}
+                  <div className={`rounded-lg p-4 shadow-sm border hover:shadow-md transition-all duration-200 ${
+                    isDarkMode 
+                      ? 'bg-gray-600 border-gray-500' 
+                      : 'bg-white border-gray-100'
+                  }`}>
+                    <h4 className={`text-lg font-semibold mb-4 transition-colors duration-300 ${
+                      isDarkMode ? 'text-white' : 'text-gray-900'
+                    }`}>Record Details</h4>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {selectedItem && Object.entries(selectedItem)
+                        .filter(([key]) => {
+                          // Hide _id and _raw fields
+                          if (key.includes('_id') || key.includes('_raw')) return false;
+                          return true;
+                        })
+                        .map(([key, value]) => {
+                          // Format date fields
+                          let displayValue = value?.toString() || 'N/A';
+                          const dateFields = ['date', 'Date', 'createdAt', 'updatedAt', 'created_at', 'updated_at'];
+                          const isDateField = dateFields.some(field => key.includes(field));
+                          
+                          if (isDateField && value) {
+                            try {
+                              const date = new Date(value as string);
+                              if (!isNaN(date.getTime())) {
+                                displayValue = date.toLocaleDateString('en-GB', {
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit'
+                                });
+                              }
+                            } catch (e) {
+                              // Keep original value if parsing fails
+                            }
+                          }
+                          
+                          return (
+                            <div key={key} className={`p-4 rounded-lg border transition-colors duration-300 ${
+                              isDarkMode 
+                                ? 'bg-gradient-to-r from-gray-700 to-gray-600 border-gray-500' 
+                                : 'bg-gradient-to-r from-gray-50 to-gray-100 border-gray-200'
+                            }`}>
+                              <label className={`block text-sm font-medium mb-2 transition-colors duration-300 ${
+                                isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                              }`}>{key.replace(/([A-Z_])/g, ' $1').trim()}</label>
+                              <div className={`text-sm font-medium transition-colors duration-300 ${
+                                isDarkMode ? 'text-white' : 'text-gray-900'
+                              }`}>{displayValue}</div>
                             </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Catalog Number</label>
-                              <input
-                                type="text"
-                                value={editFormData.catalogNumber || ''}
-                                onChange={(e) => setEditFormData({...editFormData, catalogNumber: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter catalog number"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Manufacturer</label>
-                              <input
-                                type="text"
-                                value={editFormData.manufacturer || ''}
-                                onChange={(e) => setEditFormData({...editFormData, manufacturer: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter manufacturer"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">CAS Number</label>
-                              <input
-                                type="text"
-                                value={editFormData.casNumber || ''}
-                                onChange={(e) => setEditFormData({...editFormData, casNumber: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter CAS number"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Vendor Name</label>
-                              <input
-                                type="text"
-                                value={editFormData.vendorName || ''}
-                                onChange={(e) => setEditFormData({...editFormData, vendorName: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter vendor name"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Lot Number</label>
-                              <input
-                                type="text"
-                                value={editFormData.lotNumber || ''}
-                                onChange={(e) => setEditFormData({...editFormData, lotNumber: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter lot number"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Quantity Received</label>
-                              <input
-                                type="number"
-                                value={editFormData.quantityReceived || ''}
-                                onChange={(e) => setEditFormData({...editFormData, quantityReceived: parseInt(e.target.value)})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter quantity"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Unit of Measure</label>
-                              <input
-                                type="text"
-                                value={editFormData.unitOfMeasure || ''}
-                                onChange={(e) => setEditFormData({...editFormData, unitOfMeasure: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter unit"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Expiration Date</label>
-                              <input
-                                type="date"
-                                value={editFormData.expirationDate || ''}
-                                onChange={(e) => setEditFormData({...editFormData, expirationDate: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Storage Location</label>
-                              <input
-                                type="text"
-                                value={editFormData.storageLocation || ''}
-                                onChange={(e) => setEditFormData({...editFormData, storageLocation: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter storage location"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                              <select
-                                value={editFormData.status || 'Received'}
-                                onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              >
-                                <option value="Received">Received</option>
-                                <option value="Partial Shipment">Partial Shipment</option>
-                                <option value="Returned">Returned</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Received By</label>
-                              <input
-                                type="text"
-                                value={editFormData.receivedBy || ''}
-                                onChange={(e) => setEditFormData({...editFormData, receivedBy: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter receiver name"
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          // Usage Form Fields
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Reagent Name</label>
-                              <input
-                                type="text"
-                                value={editFormData.reagentName || ''}
-                                onChange={(e) => setEditFormData({...editFormData, reagentName: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter reagent name"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Catalog Number</label>
-                              <input
-                                type="text"
-                                value={editFormData.catalogNumber || ''}
-                                onChange={(e) => setEditFormData({...editFormData, catalogNumber: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter catalog number"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Lot Number</label>
-                              <input
-                                type="text"
-                                value={editFormData.lotNumber || ''}
-                                onChange={(e) => setEditFormData({...editFormData, lotNumber: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter lot number"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Quantity Used</label>
-                              <input
-                                type="number"
-                                value={editFormData.quantityUsed || ''}
-                                onChange={(e) => setEditFormData({...editFormData, quantityUsed: parseInt(e.target.value)})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter quantity used"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Unit of Measure</label>
-                              <input
-                                type="text"
-                                value={editFormData.unitOfMeasure || ''}
-                                onChange={(e) => setEditFormData({...editFormData, unitOfMeasure: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter unit"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Usage Date</label>
-                              <input
-                                type="date"
-                                value={editFormData.usageDate || ''}
-                                onChange={(e) => setEditFormData({...editFormData, usageDate: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Usage Time</label>
-                              <input
-                                type="time"
-                                value={editFormData.usageTime || ''}
-                                onChange={(e) => setEditFormData({...editFormData, usageTime: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Used By</label>
-                              <input
-                                type="text"
-                                value={editFormData.usedBy || ''}
-                                onChange={(e) => setEditFormData({...editFormData, usedBy: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter user name"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Remaining Quantity</label>
-                              <input
-                                type="number"
-                                value={editFormData.remainingQuantity || ''}
-                                onChange={(e) => setEditFormData({...editFormData, remainingQuantity: parseInt(e.target.value)})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter remaining quantity"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Test ID</label>
-                              <input
-                                type="text"
-                                value={editFormData.testId || ''}
-                                onChange={(e) => setEditFormData({...editFormData, testId: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter test ID (optional)"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                              <select
-                                value={editFormData.status || 'Used'}
-                                onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              >
-                                <option value="Used">Used</option>
-                                <option value="Consumed">Consumed</option>
-                                <option value="Expired">Expired</option>
-                              </select>
-                            </div>
-                            <div className="md:col-span-2">
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Purpose</label>
-                              <textarea
-                                value={editFormData.purpose || ''}
-                                onChange={(e) => setEditFormData({...editFormData, purpose: e.target.value})}
-                                rows={3}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Enter purpose of usage"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </form>
+                          );
+                        })}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
 
-              {/* Modal Footer */}
-              <div className="flex space-x-4 pt-6 mt-6 border-t border-gray-200"
-                   style={{
-                     background: 'rgba(249, 250, 251, 0.8)',
-                     backdropFilter: 'blur(8px)',
-                     WebkitBackdropFilter: 'blur(8px)'
-                   }}>
-                {modalType === 'delete' ? (
-                  <>
-                    <button
-                      onClick={() => setShowModal(false)}
-                      className="flex-1 border-2 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 px-6 py-3 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Handle delete logic here
-                        setShowModal(false);
-                      }}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 hover:shadow-md"
-                    >
-                      Delete
-                    </button>
-                  </>
-                ) : modalType === 'view' ? (
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 border-2 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 px-6 py-3 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
-                  >
-                    Close
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setShowModal(false)}
-                      className="flex-1 border-2 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 px-6 py-3 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Handle save/update logic here
-                        console.log('Saving data:', editFormData);
-                        setShowModal(false);
-                      }}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-200 hover:shadow-md flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-4 h-4" />
-                      {modalType === 'add' ? 'Save' : 'Update'}
-                    </button>
-                  </>
-                )}
-              </div>
+            {/* Footer */}
+            <div className={`flex justify-end gap-3 p-6 border-t ${
+              isDarkMode ? 'border-gray-700' : 'border-gray-200'
+            }`}>
+              <button
+                onClick={() => setShowModal(false)}
+                className={`px-4 py-2 rounded-lg border transition-colors duration-300 ${
+                  isDarkMode
+                    ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                Close
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

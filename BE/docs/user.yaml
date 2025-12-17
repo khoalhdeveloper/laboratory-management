@@ -1,0 +1,24 @@
+tags:
+  - name: User
+    description: User information management API
+
+paths:
+  /api/user/me:
+    get:
+      summary: Get current user's account information
+      tags: [User]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Success
+
+  /api/user/my-account:
+    get:
+      summary: Get current user's account information (alias)
+      tags: [User]
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Success
