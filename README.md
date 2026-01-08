@@ -1,3 +1,5 @@
+<img width="784" height="902" alt="Screenshot 2025-12-12 211225" src="https://github.com/user-attachments/assets/fe9945fe-3a2b-44ee-b63c-7574229f19b9" />
+
 # Laboratory Management System
 
 Hệ thống quản lý phòng thí nghiệm toàn diện với giao diện web hiện đại và API backend mạnh mẽ.
